@@ -199,26 +199,38 @@ def setupUser():
     writeAppConfig(appConfig)
 
 
-def download_song(song_name: str):
-    print(f"Searching for: {song_name}")
-    results = YoutubeSearch(song_name, max_results=1).to_dict()
+def download_song(songId):
+    response = requests.get(
+        f"https://api.spotify.com/v1/tracks/{songId}",
+        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+    )
+    data = response.json()
+
+    coverArt = data.get("album")["images"][0]["url"]
+
+    songName = (
+        data.get("name") + " - " + ", ".join([x["name"] for x in data.get("artists")])
+    )
+
+    print(f"Searching for: {songName}")
+    results = YoutubeSearch(songName, max_results=1).to_dict()
     if not results:
         print("No results found.")
         return
 
     result = results[0]
-    video_url = f"https://www.youtube.com{result['url_suffix']}"
-    video_title = result["title"]
-    thumbnail_url = result["thumbnails"][0]
+    videoUrl = f"https://www.youtube.com{result['url_suffix']}"
+    videoTitle = result["title"]
 
-    thumbnail_filename = "thumb.jpg"
-    urllib.request.urlretrieve(thumbnail_url, thumbnail_filename)
+    coverArtFileName = "thumb.jpg"
+    urllib.request.urlretrieve(coverArt, coverArtFileName)
 
     # Download audio
-    print(f"Downloading: {video_title}")
+    print(f"Downloading: {videoTitle}")
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": "%(title)s.%(ext)s",
+        "noplaylist": True,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -230,12 +242,10 @@ def download_song(song_name: str):
             },
         ],
     }
-
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(video_url, download=True)
+        info_dict = ydl.extract_info(videoUrl, download=True)
         mp3_filename = ydl.prepare_filename(info_dict).rsplit(".", 1)[0] + ".mp3"
 
-    # Embed thumbnail
     print("Embedding cover art...")
     audio = MP3(mp3_filename, ID3=ID3)
     try:
@@ -248,36 +258,54 @@ def download_song(song_name: str):
             mime="image/jpeg",
             type=3,
             desc="Cover",
-            data=open(thumbnail_filename, "rb").read(),
+            data=open(coverArtFileName, "rb").read(),
         )
     )
     audio.save()
 
     # Cleanup
-    os.remove(thumbnail_filename)
+    os.remove(coverArtFileName)
     print(f"Downloaded and tagged: {mp3_filename}")
 
 
-appConfig = getAppConfig()
+# download_song("57L5EYzCfHS7Jd58rV33lW")
 
-playlist_id = "0PoraAMiywwP84p57JPAKH"
-url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-
-while url:
-    response = requests.get(
-        url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
+with yt_dlp.YoutubeDL(
+    {
+        "extract_audio": True,
+        "format": "bestaudio/best",
+        "outtmpl": "temp.%(ext)s",
+        "noplaylist": True,
+        "quiet": False,
+        "ignoreerrors": True,
+        "cookiefile": "cookies.txt",  # Try without first
+        "extractor_args": {"youtube": ["player_client=web"]},
+    }
+) as ydl:
+    info = ydl.extract_info(
+        "https://www.youtube.com/watch?v=q4IgZhYSUqY", download=True
     )
-    data = response.json()
 
-    for item in data["items"]:
-        if item.get("track"):
-            print(
-                item["track"]["name"]
-                + " - "
-                + ", ".join([x["name"] for x in item["track"]["artists"]])
-            )
 
-    url = data.get("next")
+# playlist_id = "0PoraAMiywwP84p57JPAKH"
+# url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+#
+# while url:
+#     response = requests.get(
+#         url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
+#     )
+#     data = response.json()
+#
+#     for item in data["items"]:
+#         if item.get("track"):
+#             print(item["track"]["id"])
+#             print(
+#                 item["track"]["name"]
+#                 + " - "
+#                 + ", ".join([x["name"] for x in item["track"]["artists"]])
+#             )
+#
+#     url = data.get("next")
 
 time.sleep(100)
 
