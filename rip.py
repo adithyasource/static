@@ -1,6 +1,5 @@
 import os
 import threading
-
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlencode, urlparse, parse_qs
 import urllib.request
@@ -15,13 +14,11 @@ import random
 import requests
 import json
 from appdirs import AppDirs
-import tkinter as tk
-from tkinter import filedialog
 import questionary
 
 
 def clearScreen():
-    os.system("cls")
+    os.system("clear")
 
 
 def getAppConfig():
@@ -50,9 +47,6 @@ def writeAppConfig(appConfig):
 
 
 def chooseSyncFolder():
-    root = tk.Tk()
-    root.withdraw()
-
     if appConfig["syncFolder"]:
         userAction = questionary.confirm(
             "are you sure you want to override the already selected folder?"
@@ -60,7 +54,8 @@ def chooseSyncFolder():
         if not userAction:
             return
 
-    userFolderChoice = filedialog.askdirectory(title="choose spotify sync folder")
+    userFolderChoice = questionary.path("choose spotify sync folder").ask()
+
     appConfig["syncFolder"] = userFolderChoice
     writeAppConfig(appConfig)
     return
@@ -268,23 +263,8 @@ def download_song(songId):
     print(f"Downloaded and tagged: {mp3_filename}")
 
 
-# download_song("57L5EYzCfHS7Jd58rV33lW")
-
-with yt_dlp.YoutubeDL(
-    {
-        "extract_audio": True,
-        "format": "bestaudio/best",
-        "outtmpl": "temp.%(ext)s",
-        "noplaylist": True,
-        "quiet": False,
-        "ignoreerrors": True,
-        "cookiefile": "cookies.txt",  # Try without first
-        "extractor_args": {"youtube": ["player_client=web"]},
-    }
-) as ydl:
-    info = ydl.extract_info(
-        "https://www.youtube.com/watch?v=q4IgZhYSUqY", download=True
-    )
+download_song("57L5EYzCfHS7Jd58rV33lW")
+time.sleep(100)
 
 
 # playlist_id = "0PoraAMiywwP84p57JPAKH"
@@ -306,8 +286,6 @@ with yt_dlp.YoutubeDL(
 #             )
 #
 #     url = data.get("next")
-
-time.sleep(100)
 
 
 def main():

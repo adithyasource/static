@@ -1,0 +1,7 @@
+youtube_search
+mutagen
+yt-dlp
+requests
+tk
+appdirs
+questionary
