@@ -1,4 +1,5 @@
 import os
+import shutil
 import re
 from os import listdir
 from os.path import isfile, join
@@ -334,12 +335,21 @@ def downloadPlaylist(playlistId):
 
 
 def syncPlaylists():
-    pass
+    print(appConfig["selectedPlaylists"])
 
+    syncFolder = os.path.expanduser(appConfig["syncFolder"])
 
-downloadPlaylist("2Yw68xbhzj2y1hSmzclcFc")
+    finalPlaylists = set()
 
-time.sleep(100)
+    for x in appConfig["selectedPlaylists"]:
+        downloadPlaylist(list(x.keys())[0])
+        finalPlaylists.add(list(x.values())[0])
+
+    playlistsDownloadedFull = os.listdir(syncFolder)
+
+    for x in playlistsDownloadedFull:
+        if x not in finalPlaylists:
+            shutil.rmtree(os.path.join(syncFolder, x))
 
 
 def main():
