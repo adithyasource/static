@@ -1,4 +1,8 @@
 import os
+import re
+from os import listdir
+from os.path import isfile, join
+from pathlib import Path
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlencode, urlparse, parse_qs
@@ -163,10 +167,6 @@ appFolder = dirs.user_data_dir
 appConfig = getAppConfig()
 
 
-def syncPlaylists():
-    pass
-
-
 def setupUser():
     appConfig = getAppConfig()
 
@@ -194,37 +194,43 @@ def setupUser():
     writeAppConfig(appConfig)
 
 
-def download_song(songId):
+def downloadSong(songId, playlistFolder):
+    os.makedirs(playlistFolder, exist_ok=True)
+
     response = requests.get(
         f"https://api.spotify.com/v1/tracks/{songId}",
-        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+        headers={"Authorization": f"Bearer {appConfig['accessToken']}"},
     )
-    data = response.json()
+    trackData = response.json()
 
-    coverArt = data.get("album")["images"][0]["url"]
-
-    songName = (
-        data.get("name") + " - " + ", ".join([x["name"] for x in data.get("artists")])
+    coverArtUrl = trackData.get("album")["images"][0]["url"]
+    songTitle = (
+        trackData.get("name")
+        + " - "
+        + ", ".join([artist["name"] for artist in trackData.get("artists")])
     )
 
-    print(f"Searching for: {songName}")
-    results = YoutubeSearch(songName, max_results=1).to_dict()
-    if not results:
+    print(f"Searching for: {songTitle}")
+    searchResults = YoutubeSearch(songTitle, max_results=1).to_dict()
+    if not searchResults:
         print("No results found.")
         return
 
-    result = results[0]
-    videoUrl = f"https://www.youtube.com{result['url_suffix']}"
-    videoTitle = result["title"]
+    videoData = searchResults[0]
+    videoUrl = f"https://www.youtube.com{videoData['url_suffix']}"
+    videoTitle = videoData["title"]
 
-    coverArtFileName = "thumb.jpg"
-    urllib.request.urlretrieve(coverArt, coverArtFileName)
+    coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
+    urllib.request.urlretrieve(coverArtUrl, coverArtPath)
 
-    # Download audio
     print(f"Downloading: {videoTitle}")
-    ydl_opts = {
+    mp3FileName = f"{songTitle} {songId}"
+    mp3FullPath = os.path.join(playlistFolder, mp3FileName)
+    mp3FullPath = os.path.expanduser(mp3FullPath)
+
+    ytdlOptions = {
         "format": "bestaudio/best",
-        "outtmpl": "%(title)s.%(ext)s",
+        "outtmpl": mp3FullPath,
         "noplaylist": True,
         "postprocessors": [
             {
@@ -237,55 +243,103 @@ def download_song(songId):
             },
         ],
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(videoUrl, download=True)
-        mp3_filename = ydl.prepare_filename(info_dict).rsplit(".", 1)[0] + ".mp3"
+
+    with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
+        ydl.download([videoUrl])
+
+    time.sleep(1)
 
     print("Embedding cover art...")
-    audio = MP3(mp3_filename, ID3=ID3)
+    audioFile = MP3(mp3FullPath + ".mp3", ID3=ID3)
     try:
-        audio.add_tags()
+        audioFile.add_tags()
     except error:
         pass
-    audio.tags.add(
+
+    audioFile.tags.add(
         APIC(
             encoding=3,
             mime="image/jpeg",
             type=3,
             desc="Cover",
-            data=open(coverArtFileName, "rb").read(),
+            data=open(coverArtPath, "rb").read(),
         )
     )
-    audio.save()
+    audioFile.save()
 
-    # Cleanup
-    os.remove(coverArtFileName)
-    print(f"Downloaded and tagged: {mp3_filename}")
+    os.remove(coverArtPath)
+    print(f"Downloaded and tagged: {mp3FullPath}")
 
 
-download_song("57L5EYzCfHS7Jd58rV33lW")
+def downloadPlaylist(playlistId):
+    response = requests.get(
+        f"https://api.spotify.com/v1/playlists/{playlistId}",
+        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+    )
+    data = response.json()
+    playlistName = data.get("name")
+
+    playlistFolder = os.path.join(appConfig["syncFolder"], playlistName)
+    playlistFolder = os.path.expanduser(playlistFolder)
+
+    if not os.path.exists(playlistFolder):
+        os.makedirs(playlistFolder)
+
+    songsDownloadedFull = os.listdir(playlistFolder)
+
+    songsDownloadedIds = set()
+
+    for x in songsDownloadedFull:
+        songsDownloadedIds.add(x.split(" ")[-1].split(".mp3")[0])
+
+    url = f"https://api.spotify.com/v1/playlists/{playlistId}/tracks"
+
+    songsOrder = []
+
+    while url:
+        response = requests.get(
+            url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
+        )
+        data = response.json()
+
+        for item in data["items"]:
+            if item.get("track"):
+                songsOrder.append(item["track"]["id"])
+                if item["track"]["id"] not in songsDownloadedIds:
+                    downloadSong(item["track"]["id"], playlistFolder)
+
+        url = data.get("next")
+
+    songsDownloadedFull = os.listdir(playlistFolder)
+
+    for x in songsDownloadedFull:
+        if not x.endswith(".mp3"):
+            os.remove(os.path.join(playlistFolder, x))
+            continue
+        songId = x.split(" ")[-1].split(".mp3")[0]
+        songNumber = str(songsOrder.index(songId) + 1).zfill(3)
+
+        newName = x
+        if re.match(r"^\d{3}\. ", x):
+            newName = x[5:]
+
+        os.rename(
+            os.path.join(playlistFolder, x),
+            os.path.join(playlistFolder, f"{songNumber}. {newName}"),
+        )
+
+    print(songsOrder)
+
+    pass
+
+
+def syncPlaylists():
+    pass
+
+
+downloadPlaylist("2Yw68xbhzj2y1hSmzclcFc")
+
 time.sleep(100)
-
-
-# playlist_id = "0PoraAMiywwP84p57JPAKH"
-# url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-#
-# while url:
-#     response = requests.get(
-#         url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
-#     )
-#     data = response.json()
-#
-#     for item in data["items"]:
-#         if item.get("track"):
-#             print(item["track"]["id"])
-#             print(
-#                 item["track"]["name"]
-#                 + " - "
-#                 + ", ".join([x["name"] for x in item["track"]["artists"]])
-#             )
-#
-#     url = data.get("next")
 
 
 def main():
@@ -297,7 +351,10 @@ def main():
         print(f"sync folder: {appConfig["syncFolder"]}")
         print(f"spotify account: {appConfig["userName"]}")
 
-        mainMenuChoices = ["choose sync folder", "connect spotify account"]
+        mainMenuChoices = [
+            "choose sync folder",
+            "connect spotify account / refresh token",
+        ]
 
         if appConfig["userName"]:
             mainMenuChoices.insert(0, "choose playlists to sync")
@@ -316,7 +373,7 @@ def main():
             selectPlaylists()
         elif userAction == "choose sync folder":
             chooseSyncFolder()
-        elif userAction == "connect spotify account":
+        elif userAction == "connect spotify account / refresh token":
             setupUser()
         elif userAction is None:
             return False
