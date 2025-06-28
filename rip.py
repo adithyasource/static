@@ -200,10 +200,10 @@ appConfig = getAppConfig()
 load_dotenv()
 
 
-def setupUser():
+def setupUser(preConfirm=False):
     clearScreen()
 
-    if appConfig["userName"]:
+    if not preConfirm and appConfig["userName"]:
         userAction = questionary.confirm(
             "are you sure you want to override the already connected account?",
             style=Style([("question", "nobold")]),
@@ -325,11 +325,30 @@ def downloadSong(songId, playlistFolder):
 def downloadPlaylist(playlistId):
     clearScreen()
 
-    response = requests.get(
-        f"https://api.spotify.com/v1/playlists/{playlistId}",
-        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
-    )
+    def getData():
+        response = requests.get(
+            f"https://api.spotify.com/v1/playlists/{playlistId}",
+            headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+        )
+        return response
+
+    response = getData()
+
+    if response.status_code == 401:
+        userAction = questionary.confirm(
+            "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
+            style=Style([("question", "nobold")]),
+            qmark="",
+        ).ask()
+        if not userAction:
+            return
+
+        setupUser(True)
+        response = getData()
+        clearScreen()
+
     data = response.json()
+
     playlistName = data.get("name")
 
     noOfSongs = data.get("tracks")["total"]
