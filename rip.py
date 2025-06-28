@@ -1,29 +1,30 @@
+import json
 import os
-from subprocess import call
-from questionary import Style
-from os import devnull
-import sys
-from alive_progress import alive_bar
-from sanitize_filename import sanitize
-import shutil
+import random
 import re
+import shutil
+import string
+import sys
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlencode, urlparse, parse_qs
+import time
 import urllib.request
 import webbrowser
-from youtube_search import YoutubeSearch
-from mutagen.mp3 import MP3
-import yt_dlp
-from mutagen.id3 import ID3, APIC, error
-import time
-import string
-import random
-import requests
-import json
-from appdirs import AppDirs
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from os import devnull
+from subprocess import call
+from urllib.parse import parse_qs, urlencode, urlparse
+
 import questionary
+import requests
+import yt_dlp
+from alive_progress import alive_bar
+from appdirs import AppDirs
 from dotenv import load_dotenv
+from mutagen.id3 import APIC, ID3, error
+from mutagen.mp3 import MP3
+from questionary import Style
+from sanitize_filename import sanitize
+from youtube_search import YoutubeSearch
 
 
 def disablePrint():
