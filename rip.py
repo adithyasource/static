@@ -235,9 +235,11 @@ def downloadSong(songId, playlistFolder):
         f"https://api.spotify.com/v1/tracks/{songId}",
         headers={"Authorization": f"Bearer {appConfig['accessToken']}"},
     )
+    if response.status_code == 400:
+        return
+
     trackData = response.json()
 
-    coverArtUrl = trackData.get("album")["images"][0]["url"]
     songTitle = (
         trackData.get("name")
         + " - "
@@ -253,9 +255,6 @@ def downloadSong(songId, playlistFolder):
     videoData = searchResults[0]
     videoUrl = f"https://www.youtube.com{videoData['url_suffix']}"
     videoTitle = videoData["title"]
-
-    coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
-    urllib.request.urlretrieve(coverArtUrl, coverArtPath)
 
     print(f"Downloading: {videoTitle}")
     mp3FileName = f"{songTitle} {songId}"
@@ -291,6 +290,11 @@ def downloadSong(songId, playlistFolder):
         return  # stop processing this song
 
     time.sleep(1)
+
+    # downloading and embedding cover art
+    coverArtUrl = trackData.get("album")["images"][0]["url"]
+    coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
+    urllib.request.urlretrieve(coverArtUrl, coverArtPath)
 
     try:
         print("Embedding cover art...")
