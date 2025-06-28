@@ -1,9 +1,12 @@
 import os
+from subprocess import call
+from questionary import Style
+from os import devnull
+import sys
+from alive_progress import alive_bar
+from sanitize_filename import sanitize
 import shutil
 import re
-from os import listdir
-from os.path import isfile, join
-from pathlib import Path
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlencode, urlparse, parse_qs
@@ -22,8 +25,22 @@ from appdirs import AppDirs
 import questionary
 
 
+def disablePrint():
+    sys.stdout = open(devnull, "w")
+
+
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
+
 def clearScreen():
     os.system("clear")
+    print("""
+  ______ _____  _____ 
+ |_____/   |   |_____]
+ |    \_ __|__ |        ⁂ spotify to folder ripper
+
+    """)
 
 
 def getAppConfig():
@@ -52,9 +69,13 @@ def writeAppConfig(appConfig):
 
 
 def chooseSyncFolder():
+    clearScreen()
+
     if appConfig["syncFolder"]:
         userAction = questionary.confirm(
-            "are you sure you want to override the already selected folder?"
+            "are you sure you want to override the already selected folder?",
+            style=Style([("question", "nobold")]),
+            qmark="",
         ).ask()
         if not userAction:
             return
@@ -130,8 +151,10 @@ def createAccessToken():
 
 
 def selectPlaylists():
+    clearScreen()
+
     response = requests.get(
-        f"https://api.spotify.com/v1/users/{appConfig["userId"]}/playlists",
+        "https://api.spotify.com/v1/me/playlists",
         headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
     )
 
@@ -147,13 +170,19 @@ def selectPlaylists():
 
         playlistChoices.append(
             questionary.Choice(
-                x["name"], value={x["id"]: x["name"]}, checked=alreadySelected
+                f"{x["name"]} [{x["tracks"]["total"]}]",
+                value={x["id"]: x["name"]},
+                checked=alreadySelected,
             )
         )
 
     playlistsSelected = questionary.checkbox(
         "select the playlists you want to sync",
         choices=playlistChoices,
+        qmark="",
+        pointer="⏵",
+        instruction="[<space> to pick, <enter> to confirm]",
+        style=Style([("question", "nobold")]),
     ).ask()
 
     if playlistsSelected is None:
@@ -169,11 +198,13 @@ appConfig = getAppConfig()
 
 
 def setupUser():
-    appConfig = getAppConfig()
+    clearScreen()
 
     if appConfig["userName"]:
         userAction = questionary.confirm(
-            "are you sure you want to override the already connected account?"
+            "are you sure you want to override the already connected account?",
+            style=Style([("question", "nobold")]),
+            qmark="",
         ).ask()
         if not userAction:
             return
@@ -226,6 +257,7 @@ def downloadSong(songId, playlistFolder):
 
     print(f"Downloading: {videoTitle}")
     mp3FileName = f"{songTitle} {songId}"
+    mp3FileName = sanitize(mp3FileName)
     mp3FullPath = os.path.join(playlistFolder, mp3FileName)
     mp3FullPath = os.path.expanduser(mp3FullPath)
 
@@ -233,6 +265,7 @@ def downloadSong(songId, playlistFolder):
         "format": "bestaudio/best",
         "outtmpl": mp3FullPath,
         "noplaylist": True,
+        "cookiefile": "cookies.txt",
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -245,40 +278,54 @@ def downloadSong(songId, playlistFolder):
         ],
     }
 
-    with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
-        ydl.download([videoUrl])
+    try:
+        with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
+            ydl.download([videoUrl])
+    except yt_dlp.utils.ExtractorError:
+        print(f"Video unavailable to download: {mp3FileName}")
+        return  # stop processing this song
+    except yt_dlp.utils.DownloadError:
+        print(f"Video unavailable to download: {mp3FileName}")
+        return  # stop processing this song
 
     time.sleep(1)
 
-    print("Embedding cover art...")
-    audioFile = MP3(mp3FullPath + ".mp3", ID3=ID3)
     try:
-        audioFile.add_tags()
-    except error:
-        pass
+        print("Embedding cover art...")
+        audioFile = MP3(mp3FullPath + ".mp3", ID3=ID3)
+        try:
+            audioFile.add_tags()
+        except error:
+            pass
 
-    audioFile.tags.add(
-        APIC(
-            encoding=3,
-            mime="image/jpeg",
-            type=3,
-            desc="Cover",
-            data=open(coverArtPath, "rb").read(),
+        audioFile.tags.add(
+            APIC(
+                encoding=3,
+                mime="image/jpeg",
+                type=3,
+                desc="Cover",
+                data=open(coverArtPath, "rb").read(),
+            )
         )
-    )
-    audioFile.save()
+        audioFile.save()
 
-    os.remove(coverArtPath)
-    print(f"Downloaded and tagged: {mp3FullPath}")
+        os.remove(coverArtPath)
+        print(f"Downloaded and tagged: {mp3FullPath}")
+    except Exception as e:
+        print(f"Tagging or file operations failed for {mp3FileName}: {e}")
 
 
 def downloadPlaylist(playlistId):
+    clearScreen()
+
     response = requests.get(
         f"https://api.spotify.com/v1/playlists/{playlistId}",
         headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
     )
     data = response.json()
     playlistName = data.get("name")
+
+    noOfSongs = data.get("tracks")["total"]
 
     playlistFolder = os.path.join(appConfig["syncFolder"], playlistName)
     playlistFolder = os.path.expanduser(playlistFolder)
@@ -297,25 +344,35 @@ def downloadPlaylist(playlistId):
 
     songsOrder = []
 
-    while url:
-        response = requests.get(
-            url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
-        )
-        data = response.json()
+    print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print()
 
-        for item in data["items"]:
-            if item.get("track"):
-                songsOrder.append(item["track"]["id"])
-                if item["track"]["id"] not in songsDownloadedIds:
-                    downloadSong(item["track"]["id"], playlistFolder)
+    with alive_bar(noOfSongs) as bar:
+        disablePrint()
+        while url:
+            response = requests.get(
+                url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
+            )
+            data = response.json()
 
-        url = data.get("next")
+            for item in data["items"]:
+                if item.get("track"):
+                    songsOrder.append(item["track"]["id"])
+                    if item["track"]["id"] not in songsDownloadedIds:
+                        downloadSong(item["track"]["id"], playlistFolder)
+                bar()
+
+            url = data.get("next")
+        enablePrint()
 
     songsDownloadedFull = os.listdir(playlistFolder)
 
     for x in songsDownloadedFull:
         if not x.endswith(".mp3"):
-            os.remove(os.path.join(playlistFolder, x))
+            try:
+                os.remove(os.path.join(playlistFolder, x))
+            except PermissionError:
+                print(f"could not delete {os.path.join(playlistFolder, x)}")
             continue
         songId = x.split(" ")[-1].split(".mp3")[0]
         songNumber = str(songsOrder.index(songId) + 1).zfill(3)
@@ -329,13 +386,9 @@ def downloadPlaylist(playlistId):
             os.path.join(playlistFolder, f"{songNumber}. {newName}"),
         )
 
-    print(songsOrder)
-
-    pass
-
 
 def syncPlaylists():
-    print(appConfig["selectedPlaylists"])
+    clearScreen()
 
     syncFolder = os.path.expanduser(appConfig["syncFolder"])
 
@@ -349,7 +402,11 @@ def syncPlaylists():
 
     for x in playlistsDownloadedFull:
         if x not in finalPlaylists:
-            shutil.rmtree(os.path.join(syncFolder, x))
+            unnecessary = os.path.join(syncFolder, x)
+            if os.path.isdir(unnecessary):
+                shutil.rmtree(unnecessary)
+            else:
+                os.remove(unnecessary)
 
 
 def main():
@@ -357,13 +414,13 @@ def main():
         clearScreen()
         appConfig = getAppConfig()
 
-        print("ripify - spotify to folder sync utility")
-        print(f"sync folder: {appConfig["syncFolder"]}")
-        print(f"spotify account: {appConfig["userName"]}")
-
         mainMenuChoices = [
-            "choose sync folder",
-            "connect spotify account / refresh token",
+            f"choose sync folder [{appConfig["syncFolder"]}]",
+            f"connect spotify account [{appConfig["userName"]}]",
+            "open sync folder",
+            "open data folder",
+            "built by adithya.zip",
+            "coffee?",
         ]
 
         if appConfig["userName"]:
@@ -375,16 +432,29 @@ def main():
         userAction = questionary.select(
             "what do you want to do?",
             choices=mainMenuChoices,
+            qmark="",
+            pointer="⏵",
+            instruction=" ",
+            style=Style([("question", "nobold")]),
         ).ask()
 
         if userAction == "sync":
             syncPlaylists()
         elif userAction == "choose playlists to sync":
             selectPlaylists()
-        elif userAction == "choose sync folder":
+        elif userAction == f"choose sync folder [{appConfig["syncFolder"]}]":
             chooseSyncFolder()
-        elif userAction == "connect spotify account / refresh token":
+        elif userAction == f"connect spotify account [{appConfig["userName"]}]":
             setupUser()
+
+        elif userAction == "open sync folder":
+            call(["open", "-R", os.path.expanduser(appConfig["syncFolder"])])
+        elif userAction == "open data folder":
+            call(["open", "-R", os.path.expanduser(appFolder)])
+        elif userAction == "built by adithya.zip":
+            webbrowser.open("https://adithya.zip")
+        elif userAction == "coffee?":
+            webbrowser.open("https://ko-fi.com/adithyasource")
         elif userAction is None:
             return False
 
