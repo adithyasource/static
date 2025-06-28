@@ -23,6 +23,7 @@ import requests
 import json
 from appdirs import AppDirs
 import questionary
+from dotenv import load_dotenv
 
 
 def disablePrint():
@@ -113,7 +114,7 @@ def createAccessToken():
 
     authParams = {
         "response_type": "code",
-        "client_id": "7cda876ec9b945d8b55f3c14eb2ee5da",
+        "client_id": os.getenv("CLIENT_ID"),
         "scope": scope,
         "redirect_uri": "http://localhost:9321",
         "state": state,
@@ -141,8 +142,8 @@ def createAccessToken():
             "code": authCode,
             "redirect_uri": "http://localhost:9321",
             "grant_type": "authorization_code",
-            "client_id": "7cda876ec9b945d8b55f3c14eb2ee5da",
-            "client_secret": "4f74525c87b548bcb66acf8f8fdf96c5",
+            "client_id": os.getenv("CLIENT_ID"),
+            "client_secret": os.getenv("CLIENT_SECRET"),
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
@@ -195,6 +196,7 @@ def selectPlaylists():
 dirs = AppDirs("rip", "adithya")
 appFolder = dirs.user_data_dir
 appConfig = getAppConfig()
+load_dotenv()
 
 
 def setupUser():
