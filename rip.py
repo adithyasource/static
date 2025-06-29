@@ -164,7 +164,7 @@ def createAccessToken():
     response = requests.post(
         "https://accounts.spotify.com/api/token",
         data={
-            "code": authCode,
+            "code": authCode[0],
             "redirect_uri": "http://localhost:9321",
             "grant_type": "authorization_code",
             "client_id": appConfig["clientId"],
@@ -308,7 +308,7 @@ def downloadSong(songId, playlistFolder):
 
     response = requests.get(
         f"https://api.spotify.com/v1/tracks/{songId}",
-        headers={"Authorization": f"Bearer {appConfig['accessToken']}"},
+        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
     )
     if response.status_code == 400:
         return
