@@ -9,9 +9,11 @@
     </tbody>
 </table>
 
-![Group 1 (2)](https://github.com/user-attachments/assets/881c7280-717d-4b99-ab53-602c46c742bb)
+effortlessly and accurately syncs up all your spotify playlists into a folder on your computer so that you can have an offline copy at all times. i made this so that i can sync that folder up with the [foobar2000](https://www.foobar2000.org/) app on my mobile phone through ftp and have free access to all my spotify songs, neatly seperated by playlist folders, at all times.
 
 > currently only tested on macOS
+
+![Group 1 (2)](https://github.com/user-attachments/assets/881c7280-717d-4b99-ab53-602c46c742bb)
 
 ## instructions
 ### installation
