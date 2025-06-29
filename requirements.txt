@@ -1,7 +1,6 @@
 alive_progress==3.2.0
 appdirs==1.4.4
 mutagen==1.47.0
-python-dotenv==1.1.1
 questionary==2.1.0
 Requests==2.32.4
 sanitize_filename==1.2.0
