@@ -19,7 +19,6 @@ import requests
 import yt_dlp
 from alive_progress import alive_bar
 from appdirs import AppDirs
-from dotenv import load_dotenv
 from mutagen.id3 import APIC, ID3, error
 from mutagen.mp3 import MP3
 from questionary import Style
@@ -56,6 +55,8 @@ def getAppConfig():
                 "userName": None,
                 "userId": None,
                 "selectedPlaylists": [],
+                "clientId": None,
+                "clientSecret": None,
             }
             jsonEmptyConfig = json.dumps(emptyConfig)
             f.write(jsonEmptyConfig)
@@ -79,10 +80,33 @@ def chooseSyncFolder():
             style=Style([("question", "nobold")]),
             qmark="",
         ).ask()
+
         if not userAction:
             return
 
-    userFolderChoice = questionary.path("choose spotify sync folder").ask()
+        clearScreen()
+
+    userFolderChoice = questionary.path(
+        "enter spotify sync folder path [<tab> to autocomplete]",
+        style=Style([("question", "nobold")]),
+        qmark="",
+        only_directories=True,
+    ).ask()
+
+    clearScreen()
+
+    userFolderChoice = os.path.expanduser(userFolderChoice)
+
+    contentsOfFolder = os.listdir(userFolderChoice)
+
+    if len(contentsOfFolder) != 0:
+        userAction = questionary.confirm(
+            "are you sure you want to overwrite the contents of the selected folder? (all existing data will be deleted)",
+            style=Style([("question", "nobold")]),
+            qmark="",
+        ).ask()
+        if not userAction:
+            return
 
     appConfig["syncFolder"] = userFolderChoice
     writeAppConfig(appConfig)
@@ -115,7 +139,7 @@ def createAccessToken():
 
     authParams = {
         "response_type": "code",
-        "client_id": os.getenv("CLIENT_ID"),
+        "client_id": appConfig["clientId"],
         "scope": scope,
         "redirect_uri": "http://localhost:9321",
         "state": state,
@@ -143,8 +167,8 @@ def createAccessToken():
             "code": authCode,
             "redirect_uri": "http://localhost:9321",
             "grant_type": "authorization_code",
-            "client_id": os.getenv("CLIENT_ID"),
-            "client_secret": os.getenv("CLIENT_SECRET"),
+            "client_id": appConfig["clientId"],
+            "client_secret": appConfig["clientSecret"],
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
@@ -197,15 +221,65 @@ def selectPlaylists():
 dirs = AppDirs("rip", "adithya")
 appFolder = dirs.user_data_dir
 appConfig = getAppConfig()
-load_dotenv()
+
+
+def setupClient(preConfirm=False):
+    if not preConfirm:
+        if appConfig["clientId"] or appConfig["clientSecret"]:
+            userAction = questionary.confirm(
+                "do you want to overwrite the current client secrets?",
+                style=Style([("question", "nobold")]),
+                qmark="",
+            ).ask()
+
+            clearScreen()
+
+            if not userAction:
+                return
+
+        print(
+            "in order for rip to access your spotify data, it needs a client id and secret associated to your account"
+        )
+        print()
+        print("follow the given step to obtain them")
+        print("- create a spotify developers account at https://developer.spotify.com")
+        print("- go to the dashboard and create an app")
+        print("- make sure to add the redirect uri as http://localhost:9321")
+        print()
+        input("press enter to continue")
+
+        clearScreen()
+
+        clientId = questionary.text(
+            "enter your spotify client id",
+            style=Style([("question", "nobold")]),
+            qmark="",
+        ).ask()
+
+        clearScreen()
+
+        clientSecret = questionary.text(
+            "enter your spotify client secret",
+            style=Style([("question", "nobold")]),
+            qmark="",
+        ).ask()
+
+        clearScreen()
+
+        appConfig["clientId"] = clientId
+        appConfig["clientSecret"] = clientSecret
+
+        writeAppConfig(appConfig)
 
 
 def setupUser(preConfirm=False):
     clearScreen()
 
+    setupClient(preConfirm)
+
     if not preConfirm and appConfig["userName"]:
         userAction = questionary.confirm(
-            "are you sure you want to override the already connected account?",
+            "are you sure you want to overwrite the already connected account?",
             style=Style([("question", "nobold")]),
             qmark="",
         ).ask()
@@ -440,20 +514,31 @@ def main():
         clearScreen()
         appConfig = getAppConfig()
 
-        mainMenuChoices = [
-            f"choose sync folder [{appConfig["syncFolder"]}]",
-            f"connect spotify account [{appConfig["userName"]}]",
-            "open sync folder",
-            "open data folder",
-            "built by adithya.zip",
-            "coffee?",
-        ]
-
-        if appConfig["userName"]:
-            mainMenuChoices.insert(0, "choose playlists to sync")
+        mainMenuChoices = []
 
         if len(appConfig["selectedPlaylists"]) != 0:
-            mainMenuChoices.insert(0, "sync")
+            mainMenuChoices.append("sync")
+
+        if appConfig["userName"]:
+            mainMenuChoices.append("choose playlists to sync")
+
+        mainMenuChoices.extend(
+            [
+                f"choose sync folder [{appConfig["syncFolder"]}]",
+                f"connect spotify account [{appConfig["userName"]}]",
+            ]
+        )
+
+        if appConfig["syncFolder"]:
+            mainMenuChoices.append("open sync folder")
+
+        mainMenuChoices.extend(
+            [
+                "open data folder",
+                "built by adithya.zip",
+                "coffee?",
+            ]
+        )
 
         userAction = questionary.select(
             "what do you want to do?",
