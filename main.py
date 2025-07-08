@@ -37,11 +37,13 @@ def enablePrint():
 def clearScreen():
     os.system("clear")
     print("""
-  ______ _____  _____ 
- |_____/   |   |_____]
- |    \_ __|__ |        ⁂ spotify to folder ripper
-
-    """)
+⠀⠀⠀⠀⢀⡉⠐⠀⠀⠀⠀ s
+⠀⠀⣲⠞⢻⣿⣶⡀⠀⠀⠀ t⠀⠀⠀⠀⢠⣴⡶⣦⣤⣤⣖⣀⡀⠀⠀⠀⠀⠀
+⠐⣮⡏⠀⠉⢹⣿⢷⠀⠀⠀ a⠀⠀⠀⢠⡞⠉⠀⠉⠉⣿⣿⣿⣿⣿⣄⣂⡄⠀
+⠀⠀⢃⠀⠀⢀⣿⡨⠀⠀⠀ t⠀⠀⠀⠋⠀⠀⠀⠀⠀⠈⣿⣿⠋⠛⣿⠋⠀⠀
+⠀⠀⠐⢄⡐⠈⢁⠘⠀⠀⠀ i⠀⠀⠀⠀⠀⠀⠀⡠⠀⠔⠿⠋⠀⢀⠇⠀⠀⠀
+⠀⠀⠀⠀⠈⠉⠉⠀⠀⠀⠀ c⠀⠀⠀⠀⠀⠀⠀⠐⢀⠀⠀⢀⡰⠃⠀⠀⠀⠀
+""")
 
 
 def getAppConfig():
@@ -131,7 +133,7 @@ def createAccessToken():
 
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"you can close this window and head back to rip!\n")
+            self.wfile.write(b"you can close this window and head back to static!\n")
             threading.Thread(target=server.shutdown).start()  # shutdown the server
 
     state = randomString()
@@ -235,7 +237,7 @@ def selectPlaylists():
     writeAppConfig(appConfig)
 
 
-dirs = AppDirs("rip", "adithya")
+dirs = AppDirs("static", "adithya")
 appFolder = dirs.user_data_dir
 appConfig = getAppConfig()
 
@@ -255,7 +257,7 @@ def setupClient(preConfirm=False):
                 return
 
         print(
-            "in order for rip to access your spotify data, it needs a client id and secret associated to your account"
+            "in order for static to access your spotify data, it needs a client id and secret associated to your account"
         )
         print()
         print("follow the given step to obtain them")
@@ -558,7 +560,7 @@ def main():
         )
 
         userAction = questionary.select(
-            "what do you want to do?",
+            "hey there!",
             choices=mainMenuChoices,
             qmark="",
             pointer="⏵",
