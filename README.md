@@ -15,6 +15,8 @@ effortlessly and accurately syncs up all your spotify playlists into a folder on
 
 > currently only tested on macOS
 
+> ⚠️ for personal use
+
 ## instructions
 ### installation
 - clone the repository with ```git clone https://github.com/adithyasource/static/```
