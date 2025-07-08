@@ -1,15 +1,15 @@
-# rip
+# static
 
 <table>
     <tbody>
         <tr>
             <td><a href="#instructions"> run it!</a></td>
-            <td>spotify to folder ripper</td>
+            <td>sync your music, from stream to static</td>
         </tr>
     </tbody>
 </table>
 
-effortlessly and accurately syncs up all your spotify playlists into a folder on your computer so that you can have an offline copy at all times. i made this so that i can sync that folder up with the [foobar2000](https://www.foobar2000.org/) app on my mobile phone through ftp and have free access to all my spotify songs, neatly seperated by playlist folders, at all times.
+effortlessly and accurately syncs up all your spotify playlists into a folder on your computer so that you can have an offline copy at all times. i made this so that i can sync that folder up with the [foobar2000](https://www.foobar2000.org/) app on my mobile phone through ftp and have free access to all my spotify songs, neatly seperated by playlist folders.
 
 > currently only tested on macOS
 
@@ -17,7 +17,7 @@ effortlessly and accurately syncs up all your spotify playlists into a folder on
 
 ## instructions
 ### installation
-- clone the repository with ```git clone https://github.com/adithyasource/rip/```
+- clone the repository with ```git clone https://github.com/adithyasource/static/```
 - create a virtual environment with ```python3 -m venv env``` and activate it using ```source env/bin/activate```
 - install the dependencies using ```pip3 install -r requirements.txt```
 - run the program using ```python3 rip.py```
