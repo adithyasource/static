@@ -179,10 +179,27 @@ def createAccessToken():
 def selectPlaylists():
     clearScreen()
 
-    response = requests.get(
-        "https://api.spotify.com/v1/me/playlists",
-        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
-    )
+    def getData():
+        response = requests.get(
+            "https://api.spotify.com/v1/me/playlists",
+            headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+        )
+        return response
+
+    response = getData()
+
+    if response.status_code == 401:
+        userAction = questionary.confirm(
+            "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
+            style=Style([("question", "nobold")]),
+            qmark="",
+        ).ask()
+        if not userAction:
+            return
+
+        setupUser(True)
+        response = getData()
+        clearScreen()
 
     data = response.json()
 
