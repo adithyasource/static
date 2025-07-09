@@ -24,6 +24,7 @@ from mutagen.mp3 import MP3
 from questionary import Style
 from sanitize_filename import sanitize
 from youtube_search import YoutubeSearch
+from yt_dlp import utils
 
 
 def disablePrint():
@@ -376,10 +377,10 @@ def downloadSong(songId, playlistFolder):
     try:
         with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
             ydl.download([videoUrl])
-    except yt_dlp.utils.ExtractorError:
+    except utils.ExtractorError:
         print(f"Video unavailable to download: {mp3FileName}")
         return  # stop processing this song
-    except yt_dlp.utils.DownloadError:
+    except utils.DownloadError:
         print(f"Video unavailable to download: {mp3FileName}")
         return  # stop processing this song
 
