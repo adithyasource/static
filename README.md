@@ -20,9 +20,8 @@ effortlessly and accurately syncs up all your spotify playlists into a folder on
 ## instructions
 ### installation
 - clone the repository with ```git clone https://github.com/adithyasource/static/```
-- create a virtual environment with ```python3 -m venv env``` and activate it using ```source env/bin/activate```
-- install the dependencies using ```pip3 install -r requirements.txt```
-- run the program using ```python3 rip.py```
+- setup the project using [uv](https://docs.astral.sh/uv/#installation) with ```uv sync```
+- run the program using ```uv run main.py```
 
 ### spotify setup
 > these instructions are also prompted during the spotify account connection process where you'll be entering the obtained client id and secret
@@ -34,7 +33,7 @@ effortlessly and accurately syncs up all your spotify playlists into a folder on
 ## contributing
 first of all, thank you so much for using the script and deciding to contribute! i really appreciate it ^-^ \
 please try to do the following before opening a pull request!
-- lint and format the code using [ruff](https://docs.astral.sh/ruff/)
+- lint and format the code using [ruff](https://docs.astral.sh/ruff/) (i use [ty](https://github.com/astral-sh/ty) for type check and lsp)
 - keep code clean and minimal while only adding dependencies when absolutely necessary
 - make sure that if a feature is added, it is kept inline with the projects aesthetic and goals
 
