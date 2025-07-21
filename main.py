@@ -495,16 +495,17 @@ def downloadPlaylist(playlistId):
                 print(f"could not delete {os.path.join(playlistFolder, x)}")
             continue
         songId = x.split(" ")[-1].split(".mp3")[0]
-        songNumber = str(songsOrder.index(songId) + 1).zfill(3)
+        if songId in songsOrder:
+            songNumber = str(songsOrder.index(songId) + 1).zfill(3)
 
-        newName = x
-        if re.match(r"^\d{3}\. ", x):
-            newName = x[5:]
+            newName = x
+            if re.match(r"^\d{3}\. ", x):
+                newName = x[5:]
 
-        os.rename(
-            os.path.join(playlistFolder, x),
-            os.path.join(playlistFolder, f"{songNumber}. {newName}"),
-        )
+            os.rename(
+                os.path.join(playlistFolder, x),
+                os.path.join(playlistFolder, f"{songNumber}. {newName}"),
+            )
 
 
 def syncPlaylists():
