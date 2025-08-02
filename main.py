@@ -56,9 +56,6 @@ def getAppConfig():
                 "syncFolder": None,
                 "accessToken": None,
                 "userName": None,
-                "userId": None,
-                "selectedPlaylists": [],
-                "clientId": None,
                 "clientSecret": None,
             }
             jsonEmptyConfig = json.dumps(emptyConfig)
