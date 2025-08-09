@@ -358,7 +358,6 @@ def downloadSong(songId, playlistFolder):
         "format": "bestaudio/best",
         "outtmpl": mp3FullPath,
         "noplaylist": True,
-        "cookiefile": "cookies.txt",
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
