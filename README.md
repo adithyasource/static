@@ -11,7 +11,7 @@
 
 ![Group 2](https://github.com/user-attachments/assets/e7f5a60c-0866-4b7d-8797-4108b5ccd5dc)
 
-effortlessly and accurately syncs up all your spotify playlists into a folder on your computer so that you can have an offline copy at all times. i made this so that i can sync that folder up with the [foobar2000](https://www.foobar2000.org/) app on my mobile phone through ftp and have free access to all my spotify songs, neatly separated by playlist folders.
+effortlessly and accurately syncs up all your spotify playlists into a folder on your computer so that you can have an offline copy at all times. i made this so that i can sync that folder up my phone using syncthing and have free access to all my spotify songs on the [foobar2000](https://www.foobar2000.org/) app, neatly separated by playlist folders.
 
 > currently only tested on macOS
 
