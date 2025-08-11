@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "alive-progress>=3.2.0",
     "appdirs>=1.4.4",
+    "loguru>=0.7.3",
     "mutagen>=1.47.0",
     "questionary>=2.1.0",
     "requests>=2.32.4",

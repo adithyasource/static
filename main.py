@@ -19,7 +19,9 @@ import requests
 import yt_dlp
 from alive_progress import alive_bar
 from appdirs import AppDirs
-from mutagen.id3 import APIC, ID3, error
+from loguru import logger as log
+from mutagen.easyid3 import EasyID3
+from mutagen.id3 import APIC, TXXX
 from mutagen.mp3 import MP3
 from questionary import Style
 from sanitize_filename import sanitize
@@ -125,7 +127,7 @@ def createAccessToken():
             parsed_url = urlparse(self.path)
             query_params = parse_qs(parsed_url.query)
 
-            print("GET query parameters received:", query_params)
+            log.info("GET query parameters received:", query_params)
 
             authCode[0] = query_params["code"][0]
 
@@ -145,7 +147,7 @@ def createAccessToken():
         "state": state,
     }
 
-    print(urlencode(authParams))
+    log.debug(urlencode(authParams))
 
     PORT = 9321
     global server
@@ -158,8 +160,8 @@ def createAccessToken():
 
     thread.join()
 
-    print("threads closed")
-    print(authCode[0])
+    log.info("threads closed")
+    log.info(authCode[0])
 
     response = requests.post(
         "https://accounts.spotify.com/api/token",
@@ -338,17 +340,17 @@ def downloadSong(songId, playlistFolder):
         + ", ".join([artist["name"] for artist in trackData.get("artists")])
     )
 
-    print(f"Searching for: {songTitle}")
+    log.info(f"Searching for: {songTitle}")
     searchResults = YoutubeSearch(songTitle, max_results=1).to_dict()
     if not searchResults:
-        print("No results found.")
+        log.info("No results found.")
         return
 
     videoData = searchResults[0]
     videoUrl = f"https://www.youtube.com{videoData['url_suffix']}"
     videoTitle = videoData["title"]
 
-    print(f"Downloading: {videoTitle}")
+    log.info(f"Downloading: {videoTitle}")
     mp3FileName = f"{songTitle} {songId}"
     mp3FileName = sanitize(mp3FileName)
     mp3FullPath = os.path.join(playlistFolder, mp3FileName)
@@ -374,10 +376,10 @@ def downloadSong(songId, playlistFolder):
         with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
             ydl.download([videoUrl])
     except utils.ExtractorError:
-        print(f"Video unavailable to download: {mp3FileName}")
+        log.info(f"Video unavailable to download: {mp3FileName}")
         return  # stop processing this song
     except utils.DownloadError:
-        print(f"Video unavailable to download: {mp3FileName}")
+        log.info(f"Video unavailable to download: {mp3FileName}")
         return  # stop processing this song
 
     time.sleep(1)
@@ -387,15 +389,12 @@ def downloadSong(songId, playlistFolder):
     coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
     urllib.request.urlretrieve(coverArtUrl, coverArtPath)
 
-    try:
-        print("Embedding cover art...")
-        audioFile = MP3(mp3FullPath + ".mp3", ID3=ID3)
-        try:
-            audioFile.add_tags()
-        except error:
-            pass
+    audio = MP3(mp3FullPath + ".mp3")
 
-        audioFile.tags.add(
+    try:
+        log.info("Embedding cover art...")
+
+        audio.tags.add(
             APIC(
                 encoding=3,
                 mime="image/jpeg",
@@ -404,12 +403,17 @@ def downloadSong(songId, playlistFolder):
                 data=open(coverArtPath, "rb").read(),
             )
         )
-        audioFile.save()
+
+        audio.tags.add(
+            TXXX(encoding=3, desc="STATIC_YOUTUBE_ID", text=str("yo custom value")),
+        )
+
+        audio.save()
 
         os.remove(coverArtPath)
-        print(f"Downloaded and tagged: {mp3FullPath}")
+        log.info(f"Downloaded and tagged: {mp3FullPath}")
     except Exception as e:
-        print(f"Tagging or file operations failed for {mp3FileName}: {e}")
+        log.info(f"Tagging or file operations failed for {mp3FileName}: {e}")
 
 
 def downloadPlaylist(playlistId):
@@ -488,7 +492,7 @@ def downloadPlaylist(playlistId):
             try:
                 os.remove(os.path.join(playlistFolder, x))
             except PermissionError:
-                print(f"could not delete {os.path.join(playlistFolder, x)}")
+                log.info(f"could not delete {os.path.join(playlistFolder, x)}")
             continue
         songId = x.split(" ")[-1].split(".mp3")[0]
         if songId in songsOrder:
@@ -530,6 +534,14 @@ def main():
     while True:
         clearScreen()
         appConfig = getAppConfig()
+
+        log.remove(0)
+
+        log.add(
+            os.path.expanduser(os.path.join(appFolder, "static.log")), rotation="1 week"
+        )
+
+        log.info("starting")
 
         mainMenuChoices = []
 
