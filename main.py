@@ -495,7 +495,7 @@ def downloadPlaylist(playlistId):
     songsDownloadedIds = set()
 
     for x in songsDownloadedFull:
-        if x in [".DS_Store"]:
+        if x in [".DS_Store"] or x.endswith((".part", ".ytdl")):
             continue
 
         audio = File(os.path.join(playlistFolder, x))
