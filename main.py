@@ -20,8 +20,7 @@ import yt_dlp
 from alive_progress import alive_bar
 from appdirs import AppDirs
 from loguru import logger as log
-from mutagen.easyid3 import EasyID3
-from mutagen.id3 import APIC, TXXX
+from mutagen.id3 import APIC, TXXX, ID3, TPE1, TIT2, TPOS, TRCK, TDRC, TALB, TPE2
 from mutagen.mp3 import MP3
 from questionary import Style
 from sanitize_filename import sanitize
@@ -351,7 +350,7 @@ def downloadSong(songId, playlistFolder):
     videoTitle = videoData["title"]
 
     log.info(f"Downloading: {videoTitle}")
-    mp3FileName = f"{songTitle} {songId}"
+    mp3FileName = f"{songTitle}"
     mp3FileName = sanitize(mp3FileName)
     mp3FullPath = os.path.join(playlistFolder, mp3FileName)
     mp3FullPath = os.path.expanduser(mp3FullPath)
@@ -389,10 +388,15 @@ def downloadSong(songId, playlistFolder):
     coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
     urllib.request.urlretrieve(coverArtUrl, coverArtPath)
 
-    audio = MP3(mp3FullPath + ".mp3")
-
     try:
+        audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
+
+        log.debug(videoUrl)
+        youtubeVideoId = parse_qs(urlparse(videoUrl).query)["v"][0]
+
         log.info("Embedding cover art...")
+
+        audio.delete()
 
         audio.tags.add(
             APIC(
@@ -404,13 +408,45 @@ def downloadSong(songId, playlistFolder):
             )
         )
 
+        audio.tags.add(TXXX(encoding=3, desc="STATIC_SPOTIFY_ID", text=[str(songId)]))
+
         audio.tags.add(
-            TXXX(encoding=3, desc="STATIC_YOUTUBE_ID", text=str("yo custom value")),
+            TXXX(encoding=3, desc="STATIC_YOUTUBE_ID", text=[str(youtubeVideoId)])
         )
+
+        audio.tags.add(
+            TXXX(
+                encoding=3,
+                desc="ITUNESADVISORY",
+                text=[str(1 if bool(trackData.get("explicit")) else 0)],
+            ),
+        )
+
+        audio.tags.add(
+            TPE1(
+                encoding=3, text=[artist["name"] for artist in trackData.get("artists")]
+            )
+        )
+
+        audio.tags.add(
+            TPE2(
+                encoding=3,
+                text=[artist["name"] for artist in trackData.get("album")["artists"]],
+            )
+        )
+
+        audio.tags.add(TIT2(encoding=3, text=[str(trackData.get("name"))]))
+        audio.tags.add(TPOS(encoding=3, text=[str(trackData.get("disc_number"))]))
+        audio.tags.add(TRCK(encoding=3, text=[str(trackData.get("track_number"))]))
+        audio.tags.add(
+            TDRC(encoding=3, text=[str(trackData.get("album")["release_date"])])
+        )
+        audio.tags.add(TALB(encoding=3, text=[str(trackData.get("album")["name"])]))
 
         audio.save()
 
         os.remove(coverArtPath)
+
         log.info(f"Downloaded and tagged: {mp3FullPath}")
     except Exception as e:
         log.info(f"Tagging or file operations failed for {mp3FileName}: {e}")
@@ -531,11 +567,11 @@ def syncPlaylists():
 
 
 def main():
+    log.remove(0)
+
     while True:
         clearScreen()
         appConfig = getAppConfig()
-
-        log.remove(0)
 
         log.add(
             os.path.expanduser(os.path.join(appFolder, "static.log")), rotation="1 week"
