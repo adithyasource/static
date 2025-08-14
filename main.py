@@ -21,6 +21,7 @@ from alive_progress import alive_bar
 from appdirs import AppDirs
 from loguru import logger as log
 from mutagen.id3 import APIC, TXXX, ID3, TPE1, TIT2, TPOS, TRCK, TDRC, TALB, TPE2
+from mutagen import File
 from mutagen.mp3 import MP3
 from questionary import Style
 from sanitize_filename import sanitize
@@ -494,7 +495,12 @@ def downloadPlaylist(playlistId):
     songsDownloadedIds = set()
 
     for x in songsDownloadedFull:
-        songsDownloadedIds.add(x.split(" ")[-1].split(".mp3")[0])
+        if x in [".DS_Store"]:
+            continue
+
+        audio = File(os.path.join(playlistFolder, x))
+
+        songsDownloadedIds.add(str(audio["TXXX:STATIC_SPOTIFY_ID"]))
 
     url = f"https://api.spotify.com/v1/playlists/{playlistId}/tracks"
 
@@ -530,7 +536,9 @@ def downloadPlaylist(playlistId):
             except PermissionError:
                 log.info(f"could not delete {os.path.join(playlistFolder, x)}")
             continue
-        songId = x.split(" ")[-1].split(".mp3")[0]
+
+        audio = File(os.path.join(playlistFolder, x))
+        songId = audio["TXXX:STATIC_SPOTIFY_ID"]
         if songId in songsOrder:
             songNumber = str(songsOrder.index(songId) + 1).zfill(3)
 
