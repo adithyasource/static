@@ -119,6 +119,21 @@ def randomString():
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
 
 
+def getYoutubeID(url):
+    parsed = urlparse(url)
+
+    if parsed.query:
+        qs = parse_qs(parsed.query)
+        if "v" in qs:
+            return qs["v"][0]
+
+    pathParts = parsed.path.strip("/").split("/")
+    if "shorts" in pathParts and len(pathParts) > pathParts.index("shorts"):
+        return pathParts[pathParts.index("shorts") + 1]
+
+    return "dQw4w9WgXcQ"
+
+
 def createAccessToken():
     authCode = [None]
 
@@ -360,6 +375,7 @@ def downloadSong(songId, playlistFolder):
         "format": "bestaudio/best",
         "outtmpl": mp3FullPath,
         "noplaylist": True,
+        "cookiefile": "cookies.txt",
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -393,7 +409,7 @@ def downloadSong(songId, playlistFolder):
         audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
 
         log.debug(videoUrl)
-        youtubeVideoId = parse_qs(urlparse(videoUrl).query)["v"][0]
+        youtubeVideoId = getYoutubeID(videoUrl)
 
         log.info("Embedding cover art...")
 
@@ -450,7 +466,9 @@ def downloadSong(songId, playlistFolder):
 
         log.info(f"Downloaded and tagged: {mp3FullPath}")
     except Exception as e:
-        log.info(f"Tagging or file operations failed for {mp3FileName}: {e}")
+        log.info(
+            f"Tagging or file operations failed for {mp3FileName}: {e}. {videoUrl}"
+        )
 
 
 def downloadPlaylist(playlistId):
@@ -495,12 +513,20 @@ def downloadPlaylist(playlistId):
     songsDownloadedIds = set()
 
     for x in songsDownloadedFull:
-        if x in [".DS_Store"] or x.endswith((".part", ".ytdl")):
+        if x in [".DS_Store"] or x.endswith((".part", ".ytdl", ".jpg")):
             continue
 
-        audio = File(os.path.join(playlistFolder, x))
+        try:
+            audio = File(os.path.join(playlistFolder, x))
 
-        songsDownloadedIds.add(str(audio["TXXX:STATIC_SPOTIFY_ID"]))
+            songsDownloadedIds.add(str(audio["TXXX:STATIC_SPOTIFY_ID"]))
+        except KeyError:
+            # current song hasnt been tagged properly and we'll just redownload it
+
+            try:
+                os.remove(os.path.join(playlistFolder, x))
+            except PermissionError:
+                log.info(f"could not delete {os.path.join(playlistFolder, x)}")
 
     url = f"https://api.spotify.com/v1/playlists/{playlistId}/tracks"
 
@@ -529,12 +555,17 @@ def downloadPlaylist(playlistId):
 
     songsDownloadedFull = os.listdir(playlistFolder)
 
+    time.sleep(2)
+
     for x in songsDownloadedFull:
-        if not x.endswith(".mp3"):
-            try:
-                os.remove(os.path.join(playlistFolder, x))
-            except PermissionError:
-                log.info(f"could not delete {os.path.join(playlistFolder, x)}")
+        # if not x.endswith(".mp3"):
+        #     try:
+        #         os.remove(os.path.join(playlistFolder, x))
+        #     except PermissionError:
+        #         log.info(f"could not delete {os.path.join(playlistFolder, x)}")
+        #     continue
+
+        if x in [".DS_Store"] or x.endswith((".part", ".ytdl", ".jpg")):
             continue
 
         audio = File(os.path.join(playlistFolder, x))
