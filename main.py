@@ -415,6 +415,9 @@ def downloadSong(songId, playlistFolder):
 
         audio.delete()
 
+        if not audio.tags:
+            return
+
         audio.tags.add(
             APIC(
                 encoding=3,
