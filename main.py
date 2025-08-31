@@ -22,7 +22,7 @@ from appdirs import AppDirs
 from loguru import logger as log
 from mutagen.id3 import APIC, TXXX, ID3, TPE1, TIT2, TPOS, TRCK, TDRC, TALB, TPE2
 from mutagen import File
-from mutagen.mp3 import MP3
+from mutagen.mp3 import MP3, HeaderNotFoundError
 from questionary import Style
 from sanitize_filename import sanitize
 from youtube_search import YoutubeSearch
@@ -415,9 +415,6 @@ def downloadSong(songId, playlistFolder):
 
         audio.delete()
 
-        if not audio.tags:
-            return
-
         audio.tags.add(
             APIC(
                 encoding=3,
@@ -523,6 +520,12 @@ def downloadPlaylist(playlistId):
             audio = File(os.path.join(playlistFolder, x))
 
             songsDownloadedIds.add(str(audio["TXXX:STATIC_SPOTIFY_ID"]))
+        except HeaderNotFoundError:
+            try:
+                os.remove(os.path.join(playlistFolder, x))
+            except PermissionError:
+                log.info(f"could not delete {os.path.join(playlistFolder, x)}")
+            continue
         except KeyError:
             # current song hasnt been tagged properly and we'll just redownload it
 
