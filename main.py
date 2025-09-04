@@ -536,6 +536,7 @@ def downloadPlaylist(playlistId):
     songsOrder = []
 
     print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print("downloading and tagging files")
     print()
 
     with alive_bar(noOfSongs) as bar:
@@ -558,32 +559,34 @@ def downloadPlaylist(playlistId):
 
     songsDownloadedFull = os.listdir(playlistFolder)
 
-    time.sleep(2)
+    clearScreen()
+    print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print("organizing files")
+    print()
 
-    for x in songsDownloadedFull:
-        # if not x.endswith(".mp3"):
-        #     try:
-        #         os.remove(os.path.join(playlistFolder, x))
-        #     except PermissionError:
-        #         log.info(f"could not delete {os.path.join(playlistFolder, x)}")
-        #     continue
+    with alive_bar(noOfSongs + 1) as bar:
+        time.sleep(2)
 
-        if x in [".DS_Store"] or x.endswith((".part", ".ytdl", ".jpg")):
-            continue
+        bar()
 
-        audio = File(os.path.join(playlistFolder, x))
-        songId = audio["TXXX:STATIC_SPOTIFY_ID"]
-        if songId in songsOrder:
-            songNumber = str(songsOrder.index(songId) + 1).zfill(3)
+        for x in songsDownloadedFull:
+            if x in [".DS_Store"] or x.endswith((".part", ".ytdl", ".jpg")):
+                continue
 
-            newName = x
-            if re.match(r"^\d{3}\. ", x):
-                newName = x[5:]
+            audio = File(os.path.join(playlistFolder, x))
+            songId = audio["TXXX:STATIC_SPOTIFY_ID"]
+            if songId in songsOrder:
+                songNumber = str(songsOrder.index(songId) + 1).zfill(3)
 
-            os.rename(
-                os.path.join(playlistFolder, x),
-                os.path.join(playlistFolder, f"{songNumber}. {newName}"),
-            )
+                newName = x
+                if re.match(r"^\d{3}\. ", x):
+                    newName = x[5:]
+
+                os.rename(
+                    os.path.join(playlistFolder, x),
+                    os.path.join(playlistFolder, f"{songNumber}. {newName}"),
+                )
+            bar()
 
 
 def syncPlaylists():
