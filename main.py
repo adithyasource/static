@@ -397,18 +397,13 @@ def downloadSong(songId, playlistFolder):
 
     time.sleep(1)
 
-    # downloading and embedding cover art
-    coverArtUrl = trackData.get("album")["images"][0]["url"]
-    coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
-    urllib.request.urlretrieve(coverArtUrl, coverArtPath)
-
     try:
+        # downloading and embedding cover art
+        coverArtUrl = trackData.get("album")["images"][0]["url"]
+        coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
+        urllib.request.urlretrieve(coverArtUrl, coverArtPath)
+
         audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
-
-        log.debug(videoUrl)
-        youtubeVideoId = getYoutubeID(videoUrl)
-
-        log.info("Embedding cover art...")
 
         audio.delete()
 
@@ -421,6 +416,22 @@ def downloadSong(songId, playlistFolder):
                 data=open(coverArtPath, "rb").read(),
             )
         )
+
+        audio.save()
+
+        os.remove(coverArtPath)
+
+        log.info(f"tagged image for: {mp3FullPath}")
+    except Exception as e:
+        log.info(f"tagging image failed for {mp3FileName}: {e}. {videoUrl}")
+
+    try:
+        audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
+
+        log.debug(videoUrl)
+        youtubeVideoId = getYoutubeID(videoUrl)
+
+        log.info("Embedding cover art...")
 
         audio.tags.add(TXXX(encoding=3, desc="STATIC_SPOTIFY_ID", text=[str(songId)]))
 
@@ -458,8 +469,6 @@ def downloadSong(songId, playlistFolder):
         audio.tags.add(TALB(encoding=3, text=[str(trackData.get("album")["name"])]))
 
         audio.save()
-
-        os.remove(coverArtPath)
 
         log.info(f"Downloaded and tagged: {mp3FullPath}")
     except Exception as e:
@@ -536,6 +545,7 @@ def downloadPlaylist(playlistId):
     songsOrder = []
 
     print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print()
     print("downloading and tagging files")
     print()
 
@@ -561,6 +571,7 @@ def downloadPlaylist(playlistId):
 
     clearScreen()
     print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print()
     print("organizing files")
     print()
 
