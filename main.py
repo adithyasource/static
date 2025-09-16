@@ -219,16 +219,17 @@ def selectPlaylists():
 
     playlistChoices = []
 
-    for x in data["items"]:
-        alreadySelected = False
+    selectedIds = {list(d.keys())[0] for d in appConfig["selectedPlaylists"]}
 
-        if {x["id"]: x["name"]} in appConfig["selectedPlaylists"]:
-            alreadySelected = True
+    for x in data["items"]:
+        log.debug(x)
+
+        alreadySelected = x["id"] in selectedIds
 
         playlistChoices.append(
             questionary.Choice(
                 f"{x["name"]} [{x["tracks"]["total"]}]",
-                value={x["id"]: x["name"]},
+                value={x["id"]: {"name": x["name"], "snapshotId": x["snapshot_id"]}},
                 checked=alreadySelected,
             )
         )
@@ -608,8 +609,9 @@ def syncPlaylists():
     finalPlaylists = set()
 
     for x in appConfig["selectedPlaylists"]:
-        downloadPlaylist(list(x.keys())[0])
-        finalPlaylists.add(list(x.values())[0])
+        playlistId = list(x.keys())[0]
+        downloadPlaylist(playlistId)
+        finalPlaylists.add(x[playlistId]["name"])
 
     playlistsDownloadedFull = os.listdir(syncFolder)
 
