@@ -478,15 +478,19 @@ def downloadSong(songId, playlistFolder):
         )
 
 
-def downloadPlaylist(playlistId):
-    clearScreen()
-
+def downloadPlaylist(playlistId, snapshotId):
     def getData():
         response = requests.get(
             f"https://api.spotify.com/v1/playlists/{playlistId}",
             headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
         )
         return response
+
+    clearScreen()
+
+    print("checking for unsynced playlists")
+
+    print()
 
     response = getData()
 
@@ -504,6 +508,20 @@ def downloadPlaylist(playlistId):
         clearScreen()
 
     data = response.json()
+
+    spotifySnapshotId = data.get("snapshot_id")
+
+    if snapshotId == spotifySnapshotId:
+        return
+
+    for x in appConfig["selectedPlaylists"]:
+        key = list(x.keys())[0]
+        if key == playlistId:
+            x[key]["snapshotId"] = spotifySnapshotId
+            break
+    writeAppConfig(appConfig)
+
+    clearScreen()
 
     playlistName = data.get("name")
 
@@ -610,8 +628,11 @@ def syncPlaylists():
 
     for x in appConfig["selectedPlaylists"]:
         playlistId = list(x.keys())[0]
-        downloadPlaylist(playlistId)
-        finalPlaylists.add(x[playlistId]["name"])
+        snapshotId = x[playlistId]["snapshotId"]
+        playlistName = x[playlistId]["name"]
+
+        downloadPlaylist(playlistId, snapshotId)
+        finalPlaylists.add(playlistName)
 
     playlistsDownloadedFull = os.listdir(syncFolder)
 
