@@ -229,7 +229,12 @@ def selectPlaylists():
         playlistChoices.append(
             questionary.Choice(
                 f"{x["name"]} [{x["tracks"]["total"]}]",
-                value={x["id"]: {"name": x["name"], "snapshotId": x["snapshot_id"]}},
+                value={
+                    x["id"]: {
+                        "name": x["name"],
+                        "snapshotId": x["snapshot_id"] if alreadySelected else None,
+                    }
+                },
                 checked=alreadySelected,
             )
         )
@@ -514,13 +519,6 @@ def downloadPlaylist(playlistId, snapshotId):
     if snapshotId == spotifySnapshotId:
         return
 
-    for x in appConfig["selectedPlaylists"]:
-        key = list(x.keys())[0]
-        if key == playlistId:
-            x[key]["snapshotId"] = spotifySnapshotId
-            break
-    writeAppConfig(appConfig)
-
     clearScreen()
 
     playlistName = data.get("name")
@@ -618,6 +616,14 @@ def downloadPlaylist(playlistId, snapshotId):
                 )
             bar()
 
+    # writing the new snapshot id only after everything has been confirmed downloaded
+    for x in appConfig["selectedPlaylists"]:
+        key = list(x.keys())[0]
+        if key == playlistId:
+            x[key]["snapshotId"] = spotifySnapshotId
+            break
+    writeAppConfig(appConfig)
+
 
 def syncPlaylists():
     clearScreen()
@@ -631,6 +637,7 @@ def syncPlaylists():
         snapshotId = x[playlistId]["snapshotId"]
         playlistName = x[playlistId]["name"]
 
+        log.info(f"downloading {playlistName} {snapshotId}")
         downloadPlaylist(playlistId, snapshotId)
         finalPlaylists.add(playlistName)
 
