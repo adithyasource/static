@@ -483,45 +483,12 @@ def downloadSong(songId, playlistFolder):
         )
 
 
-def downloadPlaylist(playlistId, snapshotId):
-    def getData():
-        response = requests.get(
-            f"https://api.spotify.com/v1/playlists/{playlistId}",
-            headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
-        )
-        return response
-
+def downloadPlaylist(data):
     clearScreen()
 
-    print("checking for unsynced playlists")
-
-    print()
-
-    response = getData()
-
-    if response.status_code == 401:
-        userAction = questionary.confirm(
-            "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
-            style=Style([("question", "nobold")]),
-            qmark="",
-        ).ask()
-        if not userAction:
-            return
-
-        setupUser(True)
-        response = getData()
-        clearScreen()
-
-    data = response.json()
-
-    spotifySnapshotId = data.get("snapshot_id")
-
-    if snapshotId == spotifySnapshotId:
-        return
-
-    clearScreen()
-
+    playlistId = data.get("id")
     playlistName = data.get("name")
+    spotifySnapshotId = data.get("snapshot_id")
 
     noOfSongs = data.get("tracks")["total"]
 
@@ -625,6 +592,57 @@ def downloadPlaylist(playlistId, snapshotId):
     writeAppConfig(appConfig)
 
 
+def getUnsyncedPlaylists():
+    def getData(playlistId):
+        response = requests.get(
+            f"https://api.spotify.com/v1/playlists/{playlistId}",
+            headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+        )
+        return response
+
+    unsyncedPlaylistsData = []
+    syncedPlaylistsData = []
+
+    clearScreen()
+
+    print("checking for unsynced playlists")
+    print()
+
+    with alive_bar(len(appConfig["selectedPlaylists"])) as bar:
+        for x in appConfig["selectedPlaylists"]:
+            playlistId = list(x.keys())[0]
+            snapshotId = x[playlistId]["snapshotId"]
+
+            response = getData(playlistId)
+
+            if response.status_code == 401:
+                userAction = questionary.confirm(
+                    "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
+                    style=Style([("question", "nobold")]),
+                    qmark="",
+                ).ask()
+                if not userAction:
+                    return
+
+                setupUser(True)
+                response = getData(playlistId)
+                clearScreen()
+
+            data = response.json()
+
+            spotifySnapshotId = data.get("snapshot_id")
+
+            if snapshotId == spotifySnapshotId:
+                syncedPlaylistsData.append(data)
+            else:
+                unsyncedPlaylistsData.append(data)
+
+            bar()
+
+        log.debug(unsyncedPlaylistsData)
+    return unsyncedPlaylistsData, syncedPlaylistsData
+
+
 def syncPlaylists():
     clearScreen()
 
@@ -632,14 +650,18 @@ def syncPlaylists():
 
     finalPlaylists = set()
 
-    for x in appConfig["selectedPlaylists"]:
-        playlistId = list(x.keys())[0]
-        snapshotId = x[playlistId]["snapshotId"]
-        playlistName = x[playlistId]["name"]
+    unsyncedPlaylistsData, syncedPlaylistsData = getUnsyncedPlaylists()
+    log.debug(unsyncedPlaylistsData)
 
-        log.info(f"downloading {playlistName} {snapshotId}")
-        downloadPlaylist(playlistId, snapshotId)
+    for data in unsyncedPlaylistsData:
+        playlistName = data.get("name")
+
+        log.info(f"downloading {playlistName}")
+        downloadPlaylist(data)
         finalPlaylists.add(playlistName)
+
+    for data in syncedPlaylistsData:
+        finalPlaylists.add(data.get("name"))
 
     playlistsDownloadedFull = os.listdir(syncFolder)
 
