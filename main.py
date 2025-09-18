@@ -600,6 +600,22 @@ def getUnsyncedPlaylists():
         )
         return response
 
+    # checking for auth
+    playlistId = list(appConfig["selectedPlaylists"][0].keys())[0]
+    response = getData(playlistId)
+
+    if response.status_code == 401:
+        userAction = questionary.confirm(
+            "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
+            style=Style([("question", "nobold")]),
+            qmark="",
+        ).ask()
+        if not userAction:
+            return
+
+        setupUser(True)
+        clearScreen()
+
     unsyncedPlaylistsData = []
     syncedPlaylistsData = []
 
@@ -614,20 +630,6 @@ def getUnsyncedPlaylists():
             snapshotId = x[playlistId]["snapshotId"]
 
             response = getData(playlistId)
-
-            if response.status_code == 401:
-                userAction = questionary.confirm(
-                    "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
-                    style=Style([("question", "nobold")]),
-                    qmark="",
-                ).ask()
-                if not userAction:
-                    return
-
-                setupUser(True)
-                response = getData(playlistId)
-                clearScreen()
-
             data = response.json()
 
             spotifySnapshotId = data.get("snapshot_id")
