@@ -352,135 +352,143 @@ def downloadSong(songId, playlistFolder):
 
     trackData = response.json()
 
-    songTitle = (
-        trackData.get("name")
-        + " - "
-        + ", ".join([artist["name"] for artist in trackData.get("artists")])
-    )
-
-    log.info(f"Searching for: {songTitle}")
-    searchResults = YoutubeSearch(songTitle, max_results=1).to_dict()
-    if not searchResults:
-        log.info("No results found.")
-        return
-
-    videoData = searchResults[0]
-    videoUrl = f"https://www.youtube.com{videoData['url_suffix']}"
-    videoTitle = videoData["title"]
-
-    log.info(f"Downloading: {videoTitle}")
-    mp3FileName = f"{songTitle}"
-    mp3FileName = sanitize(mp3FileName)
-    mp3FullPath = os.path.join(playlistFolder, mp3FileName)
-    mp3FullPath = os.path.expanduser(mp3FullPath)
-
-    ytdlOptions = {
-        "format": "bestaudio/best",
-        "outtmpl": mp3FullPath,
-        "noplaylist": True,
-        "cookiefile": "cookies.txt",
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-        ],
-    }
-
     try:
-        with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
-            ydl.download([videoUrl])
-    except utils.ExtractorError:
-        log.info(f"Video unavailable to download: {mp3FileName}")
-        return  # stop processing this song
-    except utils.DownloadError:
-        log.info(f"Video unavailable to download: {mp3FileName}")
-        return  # stop processing this song
-
-    time.sleep(1)
-
-    try:
-        # downloading and embedding cover art
-        coverArtUrl = trackData.get("album")["images"][0]["url"]
-        coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
-        urllib.request.urlretrieve(coverArtUrl, coverArtPath)
-
-        audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
-
-        audio.delete()
-
-        audio.tags.add(
-            APIC(
-                encoding=3,
-                mime="image/jpeg",
-                type=3,
-                desc="Cover",
-                data=open(coverArtPath, "rb").read(),
-            )
+        songTitle = (
+            trackData.get("name")
+            + " - "
+            + ", ".join([artist["name"] for artist in trackData.get("artists")])
         )
 
-        audio.save()
+        log.info(f"Searching for: {songTitle}")
+        searchResults = YoutubeSearch(songTitle, max_results=1).to_dict()
+        if not searchResults:
+            log.info("No results found.")
+            return
 
-        os.remove(coverArtPath)
+        videoData = searchResults[0]
+        videoUrl = f"https://www.youtube.com{videoData['url_suffix']}"
+        videoTitle = videoData["title"]
 
-        log.info(f"tagged image for: {mp3FullPath}")
+        log.info(f"Downloading: {videoTitle}")
+        mp3FileName = f"{songTitle}"
+        mp3FileName = sanitize(mp3FileName)
+        mp3FullPath = os.path.join(playlistFolder, mp3FileName)
+        mp3FullPath = os.path.expanduser(mp3FullPath)
+
+        ytdlOptions = {
+            "format": "bestaudio/best",
+            "outtmpl": mp3FullPath,
+            "noplaylist": True,
+            "cookiefile": "cookies.txt",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                },
+                {
+                    "key": "FFmpegMetadata",
+                },
+            ],
+        }
+
+        try:
+            with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
+                ydl.download([videoUrl])
+        except utils.ExtractorError:
+            log.info(f"Video unavailable to download: {mp3FileName}")
+            return  # stop processing this song
+        except utils.DownloadError:
+            log.info(f"Video unavailable to download: {mp3FileName}")
+            return  # stop processing this song
+
+        time.sleep(1)
+
+        try:
+            # downloading and embedding cover art
+            coverArtUrl = trackData.get("album")["images"][0]["url"]
+            coverArtPath = os.path.join(playlistFolder, "thumb.jpg")
+            urllib.request.urlretrieve(coverArtUrl, coverArtPath)
+
+            audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
+
+            audio.delete()
+
+            audio.tags.add(
+                APIC(
+                    encoding=3,
+                    mime="image/jpeg",
+                    type=3,
+                    desc="Cover",
+                    data=open(coverArtPath, "rb").read(),
+                )
+            )
+
+            audio.save()
+
+            os.remove(coverArtPath)
+
+            log.info(f"tagged image for: {mp3FullPath}")
+        except Exception as e:
+            log.info(f"tagging image failed for {mp3FileName}: {e}. {videoUrl}")
+
+        try:
+            audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
+
+            log.debug(videoUrl)
+            youtubeVideoId = getYoutubeID(videoUrl)
+
+            log.info("Embedding cover art...")
+
+            audio.tags.add(
+                TXXX(encoding=3, desc="STATIC_SPOTIFY_ID", text=[str(songId)])
+            )
+
+            audio.tags.add(
+                TXXX(encoding=3, desc="STATIC_YOUTUBE_ID", text=[str(youtubeVideoId)])
+            )
+
+            audio.tags.add(
+                TXXX(
+                    encoding=3,
+                    desc="ITUNESADVISORY",
+                    text=[str(1 if bool(trackData.get("explicit")) else 0)],
+                ),
+            )
+
+            audio.tags.add(
+                TPE1(
+                    encoding=3,
+                    text=[artist["name"] for artist in trackData.get("artists")],
+                )
+            )
+
+            audio.tags.add(
+                TPE2(
+                    encoding=3,
+                    text=[
+                        artist["name"] for artist in trackData.get("album")["artists"]
+                    ],
+                )
+            )
+
+            audio.tags.add(TIT2(encoding=3, text=[str(trackData.get("name"))]))
+            audio.tags.add(TPOS(encoding=3, text=[str(trackData.get("disc_number"))]))
+            audio.tags.add(TRCK(encoding=3, text=[str(trackData.get("track_number"))]))
+            audio.tags.add(
+                TDRC(encoding=3, text=[str(trackData.get("album")["release_date"])])
+            )
+            audio.tags.add(TALB(encoding=3, text=[str(trackData.get("album")["name"])]))
+
+            audio.save()
+
+            log.info(f"Downloaded and tagged: {mp3FullPath}")
+        except Exception as e:
+            log.info(
+                f"Tagging or file operations failed for {mp3FileName}: {e}. {videoUrl}"
+            )
     except Exception as e:
-        log.info(f"tagging image failed for {mp3FileName}: {e}. {videoUrl}")
-
-    try:
-        audio = MP3(mp3FullPath + ".mp3", ID3=ID3)
-
-        log.debug(videoUrl)
-        youtubeVideoId = getYoutubeID(videoUrl)
-
-        log.info("Embedding cover art...")
-
-        audio.tags.add(TXXX(encoding=3, desc="STATIC_SPOTIFY_ID", text=[str(songId)]))
-
-        audio.tags.add(
-            TXXX(encoding=3, desc="STATIC_YOUTUBE_ID", text=[str(youtubeVideoId)])
-        )
-
-        audio.tags.add(
-            TXXX(
-                encoding=3,
-                desc="ITUNESADVISORY",
-                text=[str(1 if bool(trackData.get("explicit")) else 0)],
-            ),
-        )
-
-        audio.tags.add(
-            TPE1(
-                encoding=3, text=[artist["name"] for artist in trackData.get("artists")]
-            )
-        )
-
-        audio.tags.add(
-            TPE2(
-                encoding=3,
-                text=[artist["name"] for artist in trackData.get("album")["artists"]],
-            )
-        )
-
-        audio.tags.add(TIT2(encoding=3, text=[str(trackData.get("name"))]))
-        audio.tags.add(TPOS(encoding=3, text=[str(trackData.get("disc_number"))]))
-        audio.tags.add(TRCK(encoding=3, text=[str(trackData.get("track_number"))]))
-        audio.tags.add(
-            TDRC(encoding=3, text=[str(trackData.get("album")["release_date"])])
-        )
-        audio.tags.add(TALB(encoding=3, text=[str(trackData.get("album")["name"])]))
-
-        audio.save()
-
-        log.info(f"Downloaded and tagged: {mp3FullPath}")
-    except Exception as e:
-        log.info(
-            f"Tagging or file operations failed for {mp3FileName}: {e}. {videoUrl}"
-        )
+        log.info("failed to dowload current track; skipping")
 
 
 def downloadPlaylist(data):
