@@ -40,7 +40,7 @@ def enablePrint():
 def clearScreen():
     os.system("clear")
     print("""
-  ▗   ▗ ▘  
+   ▗   ▗ ▘  
  ▛▘▜▘▀▌▜▘▌▛▘
  ▄▌▐▖█▌▐▖▌▙▖
 """)
@@ -203,8 +203,9 @@ def selectPlaylists():
     response = getData()
 
     if response.status_code == 401:
+        print("looks like your spotify account got disconnected (token expired)")
         userAction = questionary.confirm(
-            "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
+            "do you want to reconnect?",
             style=Style([("question", "nobold")]),
             qmark="",
         ).ask()
@@ -226,13 +227,23 @@ def selectPlaylists():
 
         alreadySelected = x["id"] in selectedIds
 
+        currentSnapshotIsNull = False
+        for y in appConfig["selectedPlaylists"]:
+            if (
+                list(y.keys())[0] == x["id"]
+                and y[list(y.keys())[0]]["snapshotId"] is None
+            ):
+                currentSnapshotIsNull = True
+
         playlistChoices.append(
             questionary.Choice(
                 f"{x["name"]} [{x["tracks"]["total"]}]",
                 value={
                     x["id"]: {
                         "name": x["name"],
-                        "snapshotId": x["snapshot_id"] if alreadySelected else None,
+                        "snapshotId": x["snapshot_id"]
+                        if alreadySelected and not currentSnapshotIsNull
+                        else None,
                     }
                 },
                 checked=alreadySelected,
@@ -488,10 +499,11 @@ def downloadSong(songId, playlistFolder):
                 f"Tagging or file operations failed for {mp3FileName}: {e}. {videoUrl}"
             )
     except Exception as e:
-        log.info("failed to dowload current track; skipping")
+        log.info(f"failed to dowload current track; skipping; reason: {e}")
 
 
 def downloadPlaylist(data):
+    global appConfig
     clearScreen()
 
     playlistId = data.get("id")
@@ -592,6 +604,7 @@ def downloadPlaylist(data):
             bar()
 
     # writing the new snapshot id only after everything has been confirmed downloaded
+    appConfig = getAppConfig()
     for x in appConfig["selectedPlaylists"]:
         key = list(x.keys())[0]
         if key == playlistId:
@@ -613,8 +626,9 @@ def getUnsyncedPlaylists():
     response = getData(playlistId)
 
     if response.status_code == 401:
+        print("looks like your spotify account got disconnected (token expired)")
         userAction = questionary.confirm(
-            "looks like your spotify account got disconnected (token expired) do you want to reconnect?",
+            "do you want to reconnect?",
             style=Style([("question", "nobold")]),
             qmark="",
         ).ask()
