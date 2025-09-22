@@ -9,6 +9,7 @@ dependencies = [
     "appdirs>=1.4.4",
     "loguru>=0.7.3",
     "mutagen>=1.47.0",
+    "pyinstaller>=6.16.0",
     "questionary>=2.1.0",
     "requests>=2.32.4",
     "sanitize-filename>=1.2.0",
