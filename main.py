@@ -390,7 +390,7 @@ def downloadSong(songId, playlistFolder):
             "format": "bestaudio/best",
             "outtmpl": mp3FullPath,
             "noplaylist": True,
-            "cookiefile": "cookies.txt",
+            "cookiefile": os.path.expanduser(os.path.join(appFolder, "cookies.txt")),
             "postprocessors": [
                 {
                     "key": "FFmpegExtractAudio",
