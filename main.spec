@@ -1,9 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+
+sys.path.append("./.venv/lib/python3.13/site-packages")
+
+block_cipher = None
 
 a = Analysis(
     ['main.py'],
-    pathex=['./.venv/lib/python3.13/site-packages'],
+    pathex=['.'],
+    paths=["./.venv/lib/python3.13/site-packages"],
     binaries=[],
     datas=[],
     hiddenimports=[],
@@ -12,9 +18,9 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
 )
-pyz = PYZ(a.pure)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz,
@@ -30,9 +36,5 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
 )
+
