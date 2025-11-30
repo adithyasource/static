@@ -155,7 +155,7 @@ def createAccessToken():
         "response_type": "code",
         "client_id": appConfig["clientId"],
         "scope": scope,
-        "redirect_uri": "http://localhost:9321",
+        "redirect_uri": "http://127.0.0.1:9321",
         "state": state,
     }
 
@@ -163,7 +163,7 @@ def createAccessToken():
 
     PORT = 9321
     global server
-    server = HTTPServer(("localhost", PORT), SimpleHandler)
+    server = HTTPServer(("127.0.0.1", PORT), SimpleHandler)
 
     thread = threading.Thread(target=server.serve_forever)
     thread.start()
@@ -179,7 +179,7 @@ def createAccessToken():
         "https://accounts.spotify.com/api/token",
         data={
             "code": authCode[0],
-            "redirect_uri": "http://localhost:9321",
+            "redirect_uri": "http://127.0.0.1:9321",
             "grant_type": "authorization_code",
             "client_id": appConfig["clientId"],
             "client_secret": appConfig["clientSecret"],
@@ -292,7 +292,7 @@ def setupClient(preConfirm=False):
         print("follow the given step to obtain them")
         print("- create a spotify developers account at https://developer.spotify.com")
         print("- go to the dashboard and create an app")
-        print("- make sure to add the redirect uri as http://localhost:9321")
+        print("- make sure to add the redirect uri as http://127.0.0.1:9321")
         print()
         input("press enter to continue")
 

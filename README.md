@@ -32,7 +32,7 @@ or you can use it manually
 > these instructions are also prompted during the spotify account connection process where you'll be entering the obtained client id and secret
 - create a spotify developers account at [developer.spotify.com](https://developer.spotify.com)
 - go to the dashboard and create an app
-- make sure to add the redirect uri as http://localhost:9321
+- make sure to add the redirect uri as http://127.0.0.1:9321
 - obtain the client id and secret
 
 ## contributing
