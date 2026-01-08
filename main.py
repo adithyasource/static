@@ -42,7 +42,7 @@ def clearScreen():
     print("""
    ▗   ▗ ▘  
  ▛▘▜▘▀▌▜▘▌▛▘
- ▄▌▐▖█▌▐▖▌▙▖  v1.0
+ ▄▌▐▖█▌▐▖▌▙▖  v1.1.1
 """)
 
 
@@ -196,7 +196,7 @@ def selectPlaylists():
     def getData():
         response = requests.get(
             "https://api.spotify.com/v1/me/playlists",
-            headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+            headers={"Authorization": f"Bearer {appConfig['accessToken']}"},
         )
         return response
 
@@ -237,7 +237,7 @@ def selectPlaylists():
 
         playlistChoices.append(
             questionary.Choice(
-                f"{x["name"]} [{x["tracks"]["total"]}]",
+                f"{x['name']} [{x['tracks']['total']}]",
                 value={
                     x["id"]: {
                         "name": x["name"],
@@ -356,7 +356,7 @@ def downloadSong(songId, playlistFolder):
 
     response = requests.get(
         f"https://api.spotify.com/v1/tracks/{songId}",
-        headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+        headers={"Authorization": f"Bearer {appConfig['accessToken']}"},
     )
     if response.status_code == 400:
         return
@@ -548,7 +548,7 @@ def downloadPlaylist(data):
 
     songsOrder = []
 
-    print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print(f"spotify/{appConfig['userName']}/{playlistName} ->  {playlistFolder}")
     print()
     print("downloading and tagging files")
     print()
@@ -557,7 +557,7 @@ def downloadPlaylist(data):
         disablePrint()
         while url:
             response = requests.get(
-                url, headers={"Authorization": f"Bearer {appConfig["accessToken"]}"}
+                url, headers={"Authorization": f"Bearer {appConfig['accessToken']}"}
             )
             data = response.json()
 
@@ -574,7 +574,7 @@ def downloadPlaylist(data):
     songsDownloadedFull = os.listdir(playlistFolder)
 
     clearScreen()
-    print(f"spotify/{appConfig["userName"]}/{playlistName} ->  {playlistFolder}")
+    print(f"spotify/{appConfig['userName']}/{playlistName} ->  {playlistFolder}")
     print()
     print("organizing files")
     print()
@@ -617,7 +617,7 @@ def getUnsyncedPlaylists():
     def getData(playlistId):
         response = requests.get(
             f"https://api.spotify.com/v1/playlists/{playlistId}",
-            headers={"Authorization": f"Bearer {appConfig["accessToken"]}"},
+            headers={"Authorization": f"Bearer {appConfig['accessToken']}"},
         )
         return response
 
@@ -713,16 +713,16 @@ def main():
 
         mainMenuChoices = []
 
-        if len(appConfig["selectedPlaylists"]) != 0:
-            mainMenuChoices.append("sync")
-
         if appConfig["userName"]:
+            if len(appConfig["selectedPlaylists"]) != 0:
+                mainMenuChoices.append("sync")
+
             mainMenuChoices.append("choose playlists to sync")
 
         mainMenuChoices.extend(
             [
-                f"choose sync folder [{appConfig["syncFolder"]}]",
-                f"connect spotify account [{appConfig["userName"]}]",
+                f"choose sync folder [{appConfig['syncFolder']}]",
+                f"connect spotify account [{appConfig['userName']}]",
             ]
         )
 
@@ -750,9 +750,9 @@ def main():
             syncPlaylists()
         elif userAction == "choose playlists to sync":
             selectPlaylists()
-        elif userAction == f"choose sync folder [{appConfig["syncFolder"]}]":
+        elif userAction == f"choose sync folder [{appConfig['syncFolder']}]":
             chooseSyncFolder()
-        elif userAction == f"connect spotify account [{appConfig["userName"]}]":
+        elif userAction == f"connect spotify account [{appConfig['userName']}]":
             setupUser()
 
         elif userAction == "open sync folder":
