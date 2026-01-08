@@ -42,7 +42,7 @@ def clearScreen():
     print("""
    ▗   ▗ ▘  
  ▛▘▜▘▀▌▜▘▌▛▘
- ▄▌▐▖█▌▐▖▌▙▖  v1.1.1
+ ▄▌▐▖█▌▐▖▌▙▖  v1.1.2
 """)
 
 
@@ -55,7 +55,9 @@ def getAppConfig():
                 "syncFolder": None,
                 "accessToken": None,
                 "userName": None,
+                "clientId": None,
                 "clientSecret": None,
+                "selectedPlaylists": [],
             }
             jsonEmptyConfig = json.dumps(emptyConfig)
             f.write(jsonEmptyConfig)
@@ -746,25 +748,36 @@ def main():
             style=Style([("question", "nobold")]),
         ).ask()
 
-        if userAction == "sync":
-            syncPlaylists()
-        elif userAction == "choose playlists to sync":
-            selectPlaylists()
-        elif userAction == f"choose sync folder [{appConfig['syncFolder']}]":
-            chooseSyncFolder()
-        elif userAction == f"connect spotify account [{appConfig['userName']}]":
-            setupUser()
+        chooseSyncFolderAction = f"choose sync folder [{appConfig['syncFolder']}]"
+        connectAcountAction = f"connect spotify account [{appConfig['userName']}]"
 
-        elif userAction == "open sync folder":
-            call(["open", "-R", os.path.expanduser(appConfig["syncFolder"])])
-        elif userAction == "open data folder":
-            call(["open", "-R", os.path.expanduser(appFolder)])
-        elif userAction == "built by adithya.zip":
-            webbrowser.open("https://adithya.zip")
-        elif userAction == "coffee?":
-            webbrowser.open("https://ko-fi.com/adithyasource")
-        elif userAction is None:
-            return False
+        match userAction:
+            case "sync":
+                syncPlaylists()
+
+            case "choose playlists to sync":
+                selectPlaylists()
+
+            case _ if userAction == chooseSyncFolderAction:
+                chooseSyncFolder()
+
+            case _ if userAction == connectAcountAction:
+                setupUser()
+
+            case "open sync folder":
+                call(["open", "-R", os.path.expanduser(appConfig["syncFolder"])])
+
+            case "open data folder":
+                call(["open", "-R", os.path.expanduser(appFolder)])
+
+            case "built by adithya.zip":
+                webbrowser.open("https://adithya.zip")
+
+            case "coffee?":
+                webbrowser.open("https://ko-fi.com/adithyasource")
+
+            case None:
+                return False
 
 
 main()
