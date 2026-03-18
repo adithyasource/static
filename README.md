@@ -9,7 +9,10 @@
     </tbody>
 </table>
 
-![Group 4](https://github.com/user-attachments/assets/0ef4042e-de77-4214-b182-d78c38bdf502)
+> ⚠️ spotify has changed their api policies [click here to learn more](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security) \
+>  basically now, having a premium subscription is mandatory for you to use their api, and by extension, static
+
+<img width="1240" height="796" alt="Group 52" src="https://github.com/user-attachments/assets/ac2c9b3c-2f1f-4a12-a3ef-17a09567b12c" />
 
 effortlessly and accurately syncs up all your spotify playlists into a folder on your computer so that you can have an offline copy at all times. i made this so that i can sync that folder up my phone using syncthing and have free access to all my spotify songs on the [foobar2000](https://www.foobar2000.org/) app, neatly separated by playlist folders.
 
