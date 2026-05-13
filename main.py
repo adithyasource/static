@@ -42,7 +42,7 @@ def clearScreen():
     print("""
    ▗   ▗ ▘  
  ▛▘▜▘▀▌▜▘▌▛▘
- ▄▌▐▖█▌▐▖▌▙▖  v1.1.2
+ ▄▌▐▖█▌▐▖▌▙▖  v1.1.3
 """)
 
 
@@ -151,7 +151,7 @@ def createAccessToken():
             threading.Thread(target=server.shutdown).start()  # shutdown the server
 
     state = randomString()
-    scope = "user-read-private user-read-email"
+    scope = "user-read-private user-read-email playlist-read-private"
 
     authParams = {
         "response_type": "code",
@@ -224,6 +224,7 @@ def selectPlaylists():
 
     selectedIds = {list(d.keys())[0] for d in appConfig["selectedPlaylists"]}
 
+    log.debug(json.dumps(data, indent=4))
     for x in data["items"]:
         log.debug(x)
 
@@ -239,7 +240,7 @@ def selectPlaylists():
 
         playlistChoices.append(
             questionary.Choice(
-                f"{x['name']} [{x['tracks']['total']}]",
+                f"{x['name']} [{x['items']['total']}]",
                 value={
                     x["id"]: {
                         "name": x["name"],
@@ -512,7 +513,7 @@ def downloadPlaylist(data):
     playlistName = data.get("name")
     spotifySnapshotId = data.get("snapshot_id")
 
-    noOfSongs = data.get("tracks")["total"]
+    noOfSongs = data.get("items")["total"]
 
     playlistFolder = os.path.join(appConfig["syncFolder"], playlistName)
     playlistFolder = os.path.expanduser(playlistFolder)
@@ -546,7 +547,7 @@ def downloadPlaylist(data):
             except PermissionError:
                 log.info(f"could not delete {os.path.join(playlistFolder, x)}")
 
-    url = f"https://api.spotify.com/v1/playlists/{playlistId}/tracks"
+    url = f"https://api.spotify.com/v1/playlists/{playlistId}/items"
 
     songsOrder = []
 
@@ -564,10 +565,10 @@ def downloadPlaylist(data):
             data = response.json()
 
             for item in data["items"]:
-                if item.get("track"):
-                    songsOrder.append(item["track"]["id"])
-                    if item["track"]["id"] not in songsDownloadedIds:
-                        downloadSong(item["track"]["id"], playlistFolder)
+                if item.get("item"):
+                    songsOrder.append(item["item"]["id"])
+                    if item["item"]["id"] not in songsDownloadedIds:
+                        downloadSong(item["item"]["id"], playlistFolder)
                 bar()
 
             url = data.get("next")
@@ -700,6 +701,13 @@ def syncPlaylists():
                 os.remove(unnecessary)
 
 
+def resetSnapshotIds():
+    for playlist in appConfig["selectedPlaylists"]:
+        for key in playlist:
+            playlist[key]["snapshotId"] = ""
+    writeAppConfig(appConfig)
+
+
 def main():
     log.remove(0)
 
@@ -717,7 +725,7 @@ def main():
 
         if appConfig["userName"]:
             if len(appConfig["selectedPlaylists"]) != 0:
-                mainMenuChoices.append("sync")
+                mainMenuChoices.extend(["sync", "reset snapshot ids (force sync)"])
 
             mainMenuChoices.append("choose playlists to sync")
 
@@ -754,6 +762,9 @@ def main():
         match userAction:
             case "sync":
                 syncPlaylists()
+
+            case "reset snapshot ids (force sync)":
+                resetSnapshotIds()
 
             case "choose playlists to sync":
                 selectPlaylists()
