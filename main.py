@@ -42,7 +42,7 @@ def clearScreen():
     print("""
    ▗   ▗ ▘  
  ▛▘▜▘▀▌▜▘▌▛▘
- ▄▌▐▖█▌▐▖▌▙▖  v1.1.3
+ ▄▌▐▖█▌▐▖▌▙▖  v1.1.4
 """)
 
 
@@ -407,6 +407,7 @@ def downloadSong(songId, playlistFolder):
         }
 
         try:
+            log.info(f"Downloading {videoTitle} from {videoUrl}")
             with yt_dlp.YoutubeDL(ytdlOptions) as ydl:
                 ydl.download([videoUrl])
         except utils.ExtractorError:
