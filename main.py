@@ -530,23 +530,28 @@ def downloadPlaylist(data):
         if x in [".DS_Store"] or x.endswith((".part", ".ytdl", ".jpg")):
             continue
 
+        path = os.path.join(playlistFolder, x)
+
         try:
-            audio = File(os.path.join(playlistFolder, x))
+            audio = File(path)
 
-            songsDownloadedIds.add(str(audio["TXXX:STATIC_SPOTIFY_ID"]))
-        except HeaderNotFoundError:
-            try:
-                os.remove(os.path.join(playlistFolder, x))
-            except PermissionError:
-                log.info(f"could not delete {os.path.join(playlistFolder, x)}")
-            continue
-        except KeyError:
-            # current song hasnt been tagged properly and we'll just redownload it
+            if audio is None:
+                raise ValueError("Unsupported or invalid audio file")
+
+            spotify_id = audio.get("TXXX:STATIC_SPOTIFY_ID")
+
+            if spotify_id is None:
+                raise KeyError("Missing Spotify ID")
+
+            songsDownloadedIds.add(str(spotify_id))
+
+        except (HeaderNotFoundError, KeyError, ValueError, TypeError) as e:
+            log.warning(f"Invalid audio file {path}: {e}")
 
             try:
-                os.remove(os.path.join(playlistFolder, x))
-            except PermissionError:
-                log.info(f"could not delete {os.path.join(playlistFolder, x)}")
+                os.remove(path)
+            except OSError as e:
+                log.warning(f"Could not delete {path}: {e}")
 
     url = f"https://api.spotify.com/v1/playlists/{playlistId}/items"
 
