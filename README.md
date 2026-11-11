@@ -28,8 +28,9 @@ install it using brew
 
 or you can use it manually
 - clone the repository with ```git clone https://github.com/adithyasource/static/```
-- setup the project using [uv](https://docs.astral.sh/uv/#installation) with ```uv sync```
-- run the program using ```uv run main.py```
+- install [go](https://go.dev/dl/), [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) and ffmpeg
+- build the program using ```go build -o static .```
+- run it using ```./static```
 
 ### spotify setup
 > these instructions are also prompted during the spotify account connection process where you'll be entering the obtained client id and secret
@@ -55,7 +56,7 @@ if there are any features or bug fixes you'd like to suggest, please open a new 
     <tbody>
         <tr>
             <th>tech</th>
-            <td><a href="https://www.python.org/" target="_blank">python</a></td>
+            <td><a href="https://go.dev/" target="_blank">go</a></td>
         </tr>
     </tbody>
 </table>
@@ -64,8 +65,8 @@ if there are any features or bug fixes you'd like to suggest, please open a new 
     <tbody>
         <tr>
             <th>notable libs</th>
-            <td><a href="https://questionary.readthedocs.io/en/stable/" target="_blank">questionary</a></td>
-            <td><a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt_dlp</a></td>
+            <td><a href="https://github.com/raitonoberu/ytsearch" target="_blank">ytsearch</a></td>
+            <td><a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt-dlp</a></td>
         </tr>
     </tbody>
 </table>

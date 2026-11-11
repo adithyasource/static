@@ -4,3 +4,4 @@ env/
 dist/
 build/
 **/.DS_Store
+/static
