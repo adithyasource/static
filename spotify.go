@@ -100,8 +100,9 @@ type PlaylistItemsPage struct {
 func setupClient(preConfirm bool) bool {
 	if !preConfirm {
 		if cfg.ClientID != "" || cfg.ClientSecret != "" {
-			if !confirm("do you want to overwrite the current client secrets?") {
-				return false
+			if !cliMode && !confirm("do you want to overwrite the current client secrets?") {
+				// keep the saved secrets and continue with them
+				return cfg.ClientID != "" && cfg.ClientSecret != ""
 			}
 			clearScreen()
 		}
@@ -126,7 +127,7 @@ func setupClient(preConfirm bool) bool {
 	return cfg.ClientID != "" && cfg.ClientSecret != ""
 }
 
-func setupUser(preConfirm bool) {
+func setupUser(preConfirm bool, openBrowser bool) {
 	clearScreen()
 
 	if !setupClient(preConfirm) {
@@ -134,14 +135,13 @@ func setupUser(preConfirm bool) {
 		return
 	}
 
-	if !preConfirm && cfg.UserName != "" {
+	if !preConfirm && !cliMode && cfg.UserName != "" {
 		if !confirm("are you sure you want to overwrite the already connected account?") {
 			return
 		}
 	}
 
-	say("opening your browser to connect spotify...")
-	accessToken, err := createAccessToken()
+	accessToken, err := createAccessToken(openBrowser)
 	if err != nil {
 		say("could not connect spotify: %v", err)
 		return
@@ -164,7 +164,7 @@ func setupUser(preConfirm bool) {
 	say("connected as %s", display(cfg.UserName))
 }
 
-func createAccessToken() (string, error) {
+func createAccessToken(openBrowser bool) (string, error) {
 	codeCh := make(chan string, 1)
 	var server *http.Server
 
@@ -206,7 +206,15 @@ func createAccessToken() (string, error) {
 	params.Set("scope", spotifyScope)
 	params.Set("redirect_uri", redirectURI)
 	params.Set("state", randomString())
-	openURL("https://accounts.spotify.com/authorize?" + params.Encode())
+	authURL := "https://accounts.spotify.com/authorize?" + params.Encode()
+
+	say("open this link to connect spotify:")
+	say("")
+	say("%s", authURL)
+	say("")
+	if openBrowser {
+		openURL(authURL)
+	}
 
 	var code string
 	select {
@@ -303,16 +311,37 @@ func getPlaylists() ([]Playlist, int, error) {
 	return page.Items, status, err
 }
 
-func selectPlaylists() {
+// maybeReconnect offers to reconnect when the token has expired. It returns
+// true if a reconnect was attempted.
+func maybeReconnect(openBrowser bool) bool {
+	say("looks like your spotify account got disconnected (token expired)")
+
+	reconnect := false
+	if cliMode {
+		reconnect = cliAutoReconnect
+		if !reconnect {
+			say("run 'static connect' to reconnect, or pass --reconnect-if-disconnected")
+		}
+	} else {
+		reconnect = confirm("do you want to reconnect?")
+	}
+
+	if !reconnect {
+		return false
+	}
+
+	setupUser(true, openBrowser)
+	return true
+}
+
+func selectPlaylists(listOnly bool, picks []string, openBrowser bool) {
 	clearScreen()
 
 	playlists, status, err := getPlaylists()
 	if status == http.StatusUnauthorized {
-		say("looks like your spotify account got disconnected (token expired)")
-		if !confirm("do you want to reconnect?") {
+		if !maybeReconnect(openBrowser) {
 			return
 		}
-		setupUser(true)
 		clearScreen()
 		playlists, status, err = getPlaylists()
 	}
@@ -341,9 +370,17 @@ func selectPlaylists() {
 	}
 	say("")
 
-	answer, ok := askOK("select the playlists you want to sync (numbers separated by spaces or commas, enter keeps current, q cancels): ")
-	if !ok {
+	if listOnly {
 		return
+	}
+
+	answer := strings.Join(picks, " ")
+	if answer == "" {
+		var ok bool
+		answer, ok = askOK("select the playlists you want to sync (numbers separated by spaces or commas, enter keeps current, q cancels): ")
+		if !ok {
+			return
+		}
 	}
 	if answer == "" || strings.EqualFold(answer, "q") {
 		return
@@ -387,7 +424,7 @@ func selectedPlaylist(entry map[string]PlaylistMeta) (string, PlaylistMeta) {
 	return "", PlaylistMeta{}
 }
 
-func getUnsyncedPlaylists() ([]Playlist, []Playlist) {
+func getUnsyncedPlaylists(openBrowser bool) ([]Playlist, []Playlist) {
 	if len(cfg.SelectedPlaylists) == 0 {
 		return nil, nil
 	}
@@ -396,11 +433,9 @@ func getUnsyncedPlaylists() ([]Playlist, []Playlist) {
 	var check Playlist
 	status, err := spotifyGet("/playlists/"+firstID, &check)
 	if status == http.StatusUnauthorized {
-		say("looks like your spotify account got disconnected (token expired)")
-		if !confirm("do you want to reconnect?") {
+		if !maybeReconnect(openBrowser) {
 			return nil, nil
 		}
-		setupUser(true)
 		clearScreen()
 	} else if err != nil {
 		say("could not check playlists: %v", err)
@@ -436,7 +471,7 @@ func getUnsyncedPlaylists() ([]Playlist, []Playlist) {
 	return unsynced, synced
 }
 
-func syncPlaylists() {
+func syncPlaylists(openBrowser bool) {
 	clearScreen()
 
 	if cfg.SyncFolder == "" {
@@ -458,7 +493,7 @@ func syncPlaylists() {
 		return
 	}
 
-	unsynced, synced := getUnsyncedPlaylists()
+	unsynced, synced := getUnsyncedPlaylists(openBrowser)
 	if unsynced == nil && synced == nil {
 		say("sync cancelled")
 		return

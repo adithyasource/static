@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	stdlog "log"
@@ -30,6 +31,9 @@ var (
 	cfg       Config
 	logger    *stdlog.Logger
 	logFile   *os.File
+
+	cliMode          bool // true when a subcommand was given
+	cliAutoReconnect bool // set by --reconnect-if-disconnected
 )
 
 var numberedPrefix = regexp.MustCompile(`^\d{3}\. `)
@@ -67,7 +71,17 @@ func main() {
 			logFile.Close()
 		}
 	}()
-	logf("starting")
+	cliMode = len(os.Args) > 1
+	if !cliMode {
+		logf("starting")
+	}
+
+	cfg = loadConfig()
+
+	if cliMode {
+		runCLI(os.Args[1:])
+		return
+	}
 
 	for {
 		clearScreen()
@@ -77,15 +91,15 @@ func main() {
 		if cfg.UserName != "" {
 			if len(cfg.SelectedPlaylists) > 0 {
 				items = append(items,
-					menuItem{"sync", syncPlaylists},
+					menuItem{"sync", func() { syncPlaylists(true) }},
 					menuItem{"reset snapshot ids (force sync)", resetSnapshotIDs},
 				)
 			}
-			items = append(items, menuItem{"choose playlists to sync", selectPlaylists})
+			items = append(items, menuItem{"choose playlists to sync", func() { selectPlaylists(false, nil, true) }})
 		}
 		items = append(items,
 			menuItem{fmt.Sprintf("choose sync folder [%s]", display(cfg.SyncFolder)), chooseSyncFolder},
-			menuItem{fmt.Sprintf("connect spotify account [%s]", display(cfg.UserName)), func() { setupUser(false) }},
+			menuItem{fmt.Sprintf("connect spotify account [%s]", display(cfg.UserName)), func() { setupUser(false, true) }},
 		)
 		if cfg.SyncFolder != "" {
 			items = append(items, menuItem{"open sync folder", func() { openFolder(cfg.SyncFolder) }})
@@ -112,6 +126,151 @@ func main() {
 		}
 		items[n-1].action()
 		pause()
+	}
+}
+
+// --- cli --------------------------------------------------------------------
+
+func runCLI(args []string) {
+	switch args[0] {
+	case "help", "--help", "-h":
+		printHelp()
+
+	case "sync":
+		fs := flag.NewFlagSet("sync", flag.ExitOnError)
+		reconnect := fs.Bool("reconnect-if-disconnected", false, "reconnect automatically if the spotify token expired")
+		openBrowser := fs.Bool("auto-open-browser-link", false, "open the spotify login link in your browser")
+		fs.Parse(args[1:])
+		cliAutoReconnect = *reconnect
+		syncPlaylists(*openBrowser)
+
+	case "reset-snapshots", "reset":
+		resetSnapshotIDs()
+
+	case "playlists":
+		fs := flag.NewFlagSet("playlists", flag.ExitOnError)
+		listOnly := fs.Bool("list", false, "only list the playlists, don't change the selection")
+		reconnect := fs.Bool("reconnect-if-disconnected", false, "reconnect automatically if the spotify token expired")
+		openBrowser := fs.Bool("auto-open-browser-link", false, "open the spotify login link in your browser")
+		fs.Parse(args[1:])
+		cliAutoReconnect = *reconnect
+		selectPlaylists(*listOnly, fs.Args(), *openBrowser)
+
+	case "folder":
+		fs := flag.NewFlagSet("folder", flag.ExitOnError)
+		fs.Parse(args[1:])
+		if fs.NArg() > 0 {
+			setSyncFolder(fs.Arg(0))
+		} else {
+			say("sync folder: %s", display(cfg.SyncFolder))
+		}
+
+	case "connect":
+		fs := flag.NewFlagSet("connect", flag.ExitOnError)
+		clientID := fs.String("client-id", "", "spotify client id")
+		clientSecret := fs.String("client-secret", "", "spotify client secret")
+		openBrowser := fs.Bool("auto-open-browser-link", false, "open the spotify login link in your browser")
+		fs.Parse(args[1:])
+		connectSpotify(*clientID, *clientSecret, *openBrowser)
+
+	case "open":
+		target := "sync"
+		if len(args) > 1 {
+			target = args[1]
+		}
+		openTarget(target)
+
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
+		printHelp()
+		os.Exit(1)
+	}
+}
+
+func printHelp() {
+	fmt.Printf(`static %s - a local copy of your spotify, statically stored
+
+usage:
+  static                          open the interactive menu
+  static help                     show this help
+  static sync [flags]             sync all selected playlists
+  static reset-snapshots          force every playlist to sync again
+  static playlists [flags] [n...] choose playlists (numbers from the list)
+  static folder [path]            show or set the sync folder
+  static connect [flags]          connect your spotify account
+  static open [sync|data]         open the sync folder or the data folder
+
+flags:
+  sync, playlists
+    --reconnect-if-disconnected   reconnect automatically when the token expired
+    --auto-open-browser-link      open the spotify login link in your browser
+  playlists
+    --list                        only list playlists, don't change the selection
+  connect
+    --client-id <id>              spotify client id
+    --client-secret <secret>      spotify client secret
+    --auto-open-browser-link      open the spotify login link in your browser
+
+examples:
+  static sync
+  static sync --reconnect-if-disconnected --auto-open-browser-link
+  static playlists --list
+  static playlists 1 3 4
+  static folder ~/Music/spotify
+  static connect --auto-open-browser-link
+
+config: %s
+log:    %s
+`, version, filepath.Join(appFolder, "data.json"), filepath.Join(appFolder, "static.log"))
+}
+
+func connectSpotify(clientID, clientSecret string, openBrowser bool) {
+	if (clientID == "") != (clientSecret == "") {
+		say("provide both --client-id and --client-secret")
+		return
+	}
+
+	if clientID != "" {
+		cfg.ClientID = clientID
+		cfg.ClientSecret = clientSecret
+		saveConfig()
+	}
+
+	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		setupClient(false)
+		if cfg.ClientID == "" || cfg.ClientSecret == "" {
+			return
+		}
+	}
+
+	setupUser(true, openBrowser)
+}
+
+func setSyncFolder(path string) {
+	path = expandHome(path)
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		say("not an existing directory: %s", path)
+		return
+	}
+
+	cfg.SyncFolder = path
+	saveConfig()
+	say("sync folder set to %s", path)
+}
+
+func openTarget(target string) {
+	switch target {
+	case "sync":
+		if cfg.SyncFolder == "" {
+			say("no sync folder is set")
+			return
+		}
+		openFolder(cfg.SyncFolder)
+	case "data":
+		openFolder(appFolder)
+	default:
+		say("unknown target %q (use sync or data)", target)
 	}
 }
 
@@ -157,6 +316,7 @@ func resetSnapshotIDs() {
 		}
 	}
 	saveConfig()
+	say("snapshot ids reset, the next sync will download every playlist again")
 }
 
 func chooseSyncFolder() {
@@ -228,6 +388,9 @@ func say(format string, args ...any) {
 }
 
 func clearScreen() {
+	if cliMode {
+		return
+	}
 	fmt.Print("\033[H\033[2J\033[3J")
 	fmt.Print(banner)
 }

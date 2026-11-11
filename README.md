@@ -39,6 +39,24 @@ or you can use it manually
 - make sure to add the redirect uri as http://127.0.0.1:9321
 - obtain the client id and secret
 
+## cli
+
+you can skip the menu and run the commands directly
+
+```sh
+./static help
+./static sync
+./static sync --reconnect-if-disconnected --auto-open-browser-link
+./static playlists --list
+./static playlists 1 3 4
+./static folder ~/Music/spotify
+./static connect
+./static reset-snapshots
+./static open data
+```
+
+`./static help` lists every command and flag. the browser is only opened automatically when you pass `--auto-open-browser-link`, so the cli also works over ssh.
+
 ## contributing
 first of all, thank you so much for using the script and deciding to contribute! i really appreciate it ^-^ \
 please try to do the following before opening a pull request!
