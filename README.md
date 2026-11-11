@@ -83,6 +83,7 @@ if there are any features or bug fixes you'd like to suggest, please open a new 
     <tbody>
         <tr>
             <th>notable libs</th>
+            <td><a href="https://github.com/charmbracelet/bubbletea" target="_blank">bubbletea</a></td>
             <td><a href="https://github.com/raitonoberu/ytsearch" target="_blank">ytsearch</a></td>
             <td><a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt-dlp</a></td>
         </tr>

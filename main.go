@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	stdlog "log"
 	"math/rand/v2"
 	"os"
@@ -13,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 )
 
@@ -31,6 +29,8 @@ var (
 	cfg       Config
 	logger    *stdlog.Logger
 	logFile   *os.File
+
+	stderrLogger = stdlog.New(os.Stderr, "", stdlog.LstdFlags)
 
 	cliMode          bool // true when a subcommand was given
 	cliAutoReconnect bool // set by --reconnect-if-disconnected
@@ -52,11 +52,6 @@ type Config struct {
 type PlaylistMeta struct {
 	Name       string `json:"name"`
 	SnapshotID string `json:"snapshotId"`
-}
-
-type menuItem struct {
-	label  string
-	action func()
 }
 
 func main() {
@@ -83,49 +78,8 @@ func main() {
 		return
 	}
 
-	for {
-		clearScreen()
-		cfg = loadConfig()
-
-		var items []menuItem
-		if cfg.UserName != "" {
-			if len(cfg.SelectedPlaylists) > 0 {
-				items = append(items,
-					menuItem{"sync", func() { syncPlaylists(true) }},
-					menuItem{"reset snapshot ids (force sync)", resetSnapshotIDs},
-				)
-			}
-			items = append(items, menuItem{"choose playlists to sync", func() { selectPlaylists(false, nil, true) }})
-		}
-		items = append(items,
-			menuItem{fmt.Sprintf("choose sync folder [%s]", display(cfg.SyncFolder)), chooseSyncFolder},
-			menuItem{fmt.Sprintf("connect spotify account [%s]", display(cfg.UserName)), func() { setupUser(false, true) }},
-		)
-		if cfg.SyncFolder != "" {
-			items = append(items, menuItem{"open sync folder", func() { openFolder(cfg.SyncFolder) }})
-		}
-		items = append(items,
-			menuItem{"open data folder", func() { openFolder(appFolder) }},
-			menuItem{"built by adithya.zip", func() { openURL("https://adithya.zip") }},
-			menuItem{"coffee?", func() { openURL("https://ko-fi.com/adithyasource") }},
-		)
-
-		fmt.Println("hey there!")
-		for i, item := range items {
-			fmt.Printf("%d. %s\n", i+1, item.label)
-		}
-		fmt.Print("> ")
-
-		line, ok := readLine()
-		if !ok {
-			return
-		}
-		n, err := strconv.Atoi(line)
-		if err != nil || n < 1 || n > len(items) {
-			continue
-		}
-		items[n-1].action()
-		pause()
+	if err := runTUI(); err != nil {
+		fmt.Println("tui error:", err)
 	}
 }
 
@@ -319,37 +273,6 @@ func resetSnapshotIDs() {
 	say("snapshot ids reset, the next sync will download every playlist again")
 }
 
-func chooseSyncFolder() {
-	clearScreen()
-
-	if cfg.SyncFolder != "" {
-		if !confirm("are you sure you want to override the already selected folder?") {
-			return
-		}
-		clearScreen()
-	}
-
-	choice := expandHome(ask("enter spotify sync folder path: "))
-	if choice == "" {
-		return
-	}
-
-	entries, err := os.ReadDir(choice)
-	if err != nil {
-		say("could not read that folder: %v", err)
-		return
-	}
-
-	if len(entries) != 0 {
-		if !confirm("are you sure you want to overwrite the contents of the selected folder? (all existing data will be deleted)") {
-			return
-		}
-	}
-
-	cfg.SyncFolder = choice
-	saveConfig()
-}
-
 // --- small helpers ----------------------------------------------------------
 
 func defaultAppFolder() string {
@@ -374,21 +297,32 @@ func initLog() {
 		return
 	}
 	logFile = f
-	logger = stdlog.New(io.MultiWriter(os.Stderr, f), "", stdlog.LstdFlags)
+	logger = stdlog.New(f, "", stdlog.LstdFlags)
 }
 
 func logf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
 	if logger != nil {
-		logger.Printf(format, args...)
+		logger.Print(msg)
 	}
+	if tuiProgram != nil {
+		tuiProgram.Send(tuiLogMsg(msg))
+		return
+	}
+	stderrLogger.Print(msg)
 }
 
 func say(format string, args ...any) {
-	fmt.Printf(format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	if tuiProgram != nil {
+		tuiProgram.Send(tuiLogMsg(msg))
+		return
+	}
+	fmt.Println(msg)
 }
 
 func clearScreen() {
-	if cliMode {
+	if cliMode || tuiActive {
 		return
 	}
 	fmt.Print("\033[H\033[2J\033[3J")
@@ -423,11 +357,6 @@ func readLine() (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(line), true
-}
-
-func pause() {
-	fmt.Print("\npress enter to return to the menu")
-	stdin.ReadString('\n')
 }
 
 func expandHome(path string) string {
@@ -535,7 +464,11 @@ func tail(text string, lines int) string {
 	return strings.Join(parts, "\n")
 }
 
-func progress(done, total int) {
+func showProgress(done, total int) {
+	if tuiProgram != nil {
+		tuiProgram.Send(tuiProgressMsg{done: done, total: total})
+		return
+	}
 	if total > 0 {
 		fmt.Printf("\r(%d/%d)", done, total)
 	} else {
@@ -544,5 +477,8 @@ func progress(done, total int) {
 }
 
 func progressDone() {
+	if tuiProgram != nil {
+		return
+	}
 	fmt.Println()
 }

@@ -100,7 +100,7 @@ type PlaylistItemsPage struct {
 func setupClient(preConfirm bool) bool {
 	if !preConfirm {
 		if cfg.ClientID != "" || cfg.ClientSecret != "" {
-			if !cliMode && !confirm("do you want to overwrite the current client secrets?") {
+			if !cliMode && !tuiActive && !confirm("do you want to overwrite the current client secrets?") {
 				// keep the saved secrets and continue with them
 				return cfg.ClientID != "" && cfg.ClientSecret != ""
 			}
@@ -135,7 +135,7 @@ func setupUser(preConfirm bool, openBrowser bool) {
 		return
 	}
 
-	if !preConfirm && !cliMode && cfg.UserName != "" {
+	if !preConfirm && !cliMode && !tuiActive && cfg.UserName != "" {
 		if !confirm("are you sure you want to overwrite the already connected account?") {
 			return
 		}
@@ -317,9 +317,9 @@ func maybeReconnect(openBrowser bool) bool {
 	say("looks like your spotify account got disconnected (token expired)")
 
 	reconnect := false
-	if cliMode {
+	if cliMode || tuiActive {
 		reconnect = cliAutoReconnect
-		if !reconnect {
+		if !reconnect && !tuiActive {
 			say("run 'static connect' to reconnect, or pass --reconnect-if-disconnected")
 		}
 	} else {
@@ -403,18 +403,8 @@ func selectPlaylists(listOnly bool, picks []string, openBrowser bool) {
 		return
 	}
 
-	var newSelection []map[string]PlaylistMeta
-	for _, playlist := range picked {
-		meta := PlaylistMeta{Name: playlist.Name}
-		if old, ok := selected[playlist.ID]; ok {
-			meta.SnapshotID = old.SnapshotID
-		}
-		newSelection = append(newSelection, map[string]PlaylistMeta{playlist.ID: meta})
-	}
-
-	cfg.SelectedPlaylists = newSelection
-	saveConfig()
-	say("saved %d playlist(s)", len(newSelection))
+	storePlaylistSelection(picked)
+	say("saved %d playlist(s)", len(picked))
 }
 
 func selectedPlaylist(entry map[string]PlaylistMeta) (string, PlaylistMeta) {
@@ -422,6 +412,29 @@ func selectedPlaylist(entry map[string]PlaylistMeta) (string, PlaylistMeta) {
 		return id, meta
 	}
 	return "", PlaylistMeta{}
+}
+
+// storePlaylistSelection saves the chosen playlists, keeping the snapshot id of
+// playlists that were already selected.
+func storePlaylistSelection(picked []Playlist) {
+	existing := map[string]PlaylistMeta{}
+	for _, entry := range cfg.SelectedPlaylists {
+		for id, meta := range entry {
+			existing[id] = meta
+		}
+	}
+
+	var newSelection []map[string]PlaylistMeta
+	for _, playlist := range picked {
+		meta := PlaylistMeta{Name: playlist.Name}
+		if old, ok := existing[playlist.ID]; ok {
+			meta.SnapshotID = old.SnapshotID
+		}
+		newSelection = append(newSelection, map[string]PlaylistMeta{playlist.ID: meta})
+	}
+
+	cfg.SelectedPlaylists = newSelection
+	saveConfig()
 }
 
 func getUnsyncedPlaylists(openBrowser bool) ([]Playlist, []Playlist) {
@@ -464,7 +477,7 @@ func getUnsyncedPlaylists(openBrowser bool) ([]Playlist, []Playlist) {
 		} else {
 			unsynced = append(unsynced, playlist)
 		}
-		progress(i+1, len(cfg.SelectedPlaylists))
+		showProgress(i+1, len(cfg.SelectedPlaylists))
 	}
 	progressDone()
 
@@ -586,7 +599,7 @@ func downloadPlaylist(playlist Playlist) {
 			track := item.track()
 			if track == nil || track.ID == "" {
 				done++
-				progress(done, playlist.Total())
+				showProgress(done, playlist.Total())
 				continue
 			}
 
@@ -596,7 +609,7 @@ func downloadPlaylist(playlist Playlist) {
 				downloaded[track.ID] = true
 			}
 			done++
-			progress(done, playlist.Total())
+			showProgress(done, playlist.Total())
 		}
 
 		next = page.Next
