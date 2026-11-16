@@ -2,16 +2,14 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 var (
@@ -28,6 +26,7 @@ type (
 		err       error
 	}
 	runFinishedMsg struct{ err error }
+	spinTickMsg    struct{}
 )
 
 type screen int
@@ -87,18 +86,6 @@ const (
 	inputClientSecret
 )
 
-var (
-	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"})
-	accentStyle  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}).Bold(true)
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#02BA84", Dark: "#02BF87"})
-	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#FF4672", Dark: "#ED567A"})
-	docStyle     = lipgloss.NewStyle().Margin(1, 2)
-	frameStyle   = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.AdaptiveColor{Light: "#D9DCCF", Dark: "#383838"}).
-			Padding(1, 2)
-)
-
 type tuiModel struct {
 	width, height int
 	screen        screen
@@ -107,8 +94,7 @@ type tuiModel struct {
 	playlists      list.Model
 	playlistsReady bool
 	input          textinput.Model
-	spinner        spinner.Model
-	progress       progress.Model
+	spinFrame      int
 
 	inputKind  inputKind
 	inputTitle string
@@ -148,19 +134,11 @@ func newTUIModel() tuiModel {
 	input.Prompt = "> "
 	input.CharLimit = 500
 	input.Width = 60
-	input.PromptStyle = subtleStyle
-	input.Cursor.Style = accentStyle
-
-	spin := spinner.New()
-	spin.Spinner = spinner.Dot
-	spin.Style = accentStyle
 
 	return tuiModel{
-		screen:   screenMenu,
-		menu:     newMenuList(80, 20),
-		input:    input,
-		spinner:  spin,
-		progress: newProgress(40),
+		screen: screenMenu,
+		menu:   newMenuList(80, 20),
+		input:  input,
 	}
 }
 
@@ -181,23 +159,14 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tuiProgressMsg:
 		m.progressDone, m.progressTotal = msg.done, msg.total
-		if msg.total > 0 {
-			return m, m.progress.SetPercent(float64(msg.done) / float64(msg.total))
-		}
 		return m, nil
 
-	case progress.FrameMsg:
-		updated, cmd := m.progress.Update(msg)
-		m.progress = updated.(progress.Model)
-		return m, cmd
-
-	case spinner.TickMsg:
+	case spinTickMsg:
 		if m.screen != screenRun || m.runDone {
 			return m, nil
 		}
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		m.spinFrame++
+		return m, spinTick()
 
 	case playlistsLoadedMsg:
 		if msg.err != nil {
@@ -472,9 +441,8 @@ func (m tuiModel) startRun(title string, work func() error) (tea.Model, tea.Cmd)
 	m.runErr = nil
 	m.runLog = nil
 	m.progressDone, m.progressTotal = 0, 0
-	m.progress = newProgress(clamp(m.width-16, 20, 60))
 
-	cmds := []tea.Cmd{m.spinner.Tick}
+	cmds := []tea.Cmd{spinTick()}
 	if work != nil {
 		cmds = append(cmds, func() tea.Msg {
 			return runFinishedMsg{err: work()}
@@ -494,18 +462,29 @@ func (m *tuiModel) resize(width, height int) {
 		m.playlists.SetSize(m.contentWidth(), m.playlistHeight())
 	}
 	m.input.Width = clamp(width-14, 20, 80)
-	m.progress = newProgress(clamp(width-16, 20, 60))
-	if m.progressTotal > 0 {
-		m.progress.SetPercent(float64(m.progressDone) / float64(m.progressTotal))
-	}
 }
 
+// frame draws a simple rounded box with one line of vertical padding and
+// two columns of horizontal padding, surrounded by a small margin.
 func (m tuiModel) frame(content string) string {
-	return docStyle.Render(frameStyle.Width(clamp(m.width-6, 30, 200)).Render(content))
+	inner := m.contentWidth()
+	hbar := strings.Repeat("─", inner+4)
+	blank := "  │" + strings.Repeat(" ", inner+4) + "│"
+
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString("  ╭" + hbar + "╮\n")
+	b.WriteString(blank + "\n")
+	for _, line := range strings.Split(content, "\n") {
+		b.WriteString("  │  " + padRight(line, inner) + "  │\n")
+	}
+	b.WriteString(blank + "\n")
+	b.WriteString("  ╰" + hbar + "╯\n")
+	return b.String()
 }
 
 func (m tuiModel) contentWidth() int   { return clamp(m.width-10, 30, 190) }
-func (m tuiModel) menuHeight() int     { return clamp(m.height-12, 8, 60) }
+func (m tuiModel) menuHeight() int     { return clamp(m.height-16, 4, 60) }
 func (m tuiModel) playlistHeight() int { return clamp(m.height-9, 8, 60) }
 
 func (m tuiModel) View() string {
@@ -515,26 +494,26 @@ func (m tuiModel) View() string {
 
 	switch m.screen {
 	case screenMenu:
-		header := accentStyle.Render(strings.Trim(banner, "\n"))
-		return m.frame(header + "\n\n" + m.menu.View())
+		header := strings.Trim(banner, "\n")
+		return m.frame(header + "\n\n" + "main menu" + "\n\n" + m.menu.View() + "\n" + "↑/↓ move • enter select • ctrl+c quit")
 
 	case screenInput:
-		body := accentStyle.Render(m.inputTitle) + "\n\n" + m.input.View()
+		body := m.inputTitle + "\n\n" + m.input.View()
 		if m.inputHint != "" {
-			body += "\n\n" + subtleStyle.Render(m.inputHint)
+			body += "\n\n" + m.inputHint
 		}
 		if m.inputErr != "" {
-			body += "\n\n" + errStyle.Render(m.inputErr)
+			body += "\n\n" + m.inputErr
 		}
-		body += "\n\n" + subtleStyle.Render("enter confirm • esc back")
+		body += "\n\n" + "enter confirm • esc back"
 		return m.frame(body)
 
 	case screenConfirm:
-		body := accentStyle.Render(m.confirmTitle) + "\n\n" + m.confirmBody + "\n\n" + subtleStyle.Render("y/enter yes • n/esc no")
+		body := m.confirmTitle + "\n\n" + m.confirmBody + "\n\n" + "y/enter yes • n/esc no"
 		return m.frame(body)
 
 	case screenPlaylists:
-		return m.frame(m.playlists.View())
+		return m.frame("choose playlists" + "\n\n" + m.playlists.View() + "\n" + "space toggle • enter save • esc back")
 
 	case screenRun:
 		return m.frame(m.runView())
@@ -547,32 +526,32 @@ func (m tuiModel) runView() string {
 	var b strings.Builder
 
 	if !m.runDone {
-		b.WriteString(m.spinner.View() + " " + accentStyle.Render(m.runTitle))
+		b.WriteString(spinFrames[m.spinFrame%len(spinFrames)] + " " + m.runTitle)
 	} else if m.runErr != nil {
-		b.WriteString(errStyle.Render("✖ " + m.runTitle))
+		b.WriteString("✖ " + m.runTitle)
 	} else {
-		b.WriteString(successStyle.Render("✔ " + m.runTitle))
+		b.WriteString("✔ " + m.runTitle)
 	}
 
 	b.WriteString("\n\n")
 
 	if m.progressTotal > 0 {
-		b.WriteString(m.progress.View())
+		b.WriteString(progressBar(m.progressDone, m.progressTotal, clamp(m.width-16, 10, m.contentWidth()-2)))
 		b.WriteString("\n")
-		b.WriteString(subtleStyle.Render(fmt.Sprintf("%d/%d", m.progressDone, m.progressTotal)))
+		b.WriteString(fmt.Sprintf("%d/%d", m.progressDone, m.progressTotal))
 		b.WriteString("\n\n")
 	}
 
 	width := clamp(m.width-14, 20, 100)
 	for _, line := range m.runLines(width, clamp(m.height-14, 3, 20)) {
-		b.WriteString(subtleStyle.Render(line))
+		b.WriteString(line)
 		b.WriteString("\n")
 	}
 
 	if m.runDone {
-		b.WriteString("\n" + subtleStyle.Render("enter back • ctrl+c quit"))
+		b.WriteString("\n" + "enter back • ctrl+c quit")
 	} else {
-		b.WriteString("\n" + subtleStyle.Render("ctrl+c quit"))
+		b.WriteString("\n" + "ctrl+c quit")
 	}
 
 	return b.String()
@@ -624,14 +603,12 @@ func buildMenuItems() []list.Item {
 }
 
 func newMenuList(width, height int) list.Model {
-	l := list.New(buildMenuItems(), list.NewDefaultDelegate(), width, height)
-	l.Title = "main menu"
+	l := list.New(buildMenuItems(), plainDelegate{showDescription: true, height: 2, spacing: 1}, width, height)
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
 	l.SetFilteringEnabled(false)
-	l.SetShowHelp(true)
-	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select"))}
-	}
+	l.SetShowHelp(false)
 	return l
 }
 
@@ -648,27 +625,97 @@ func newPlaylistList(playlists []Playlist, width, height int) list.Model {
 		items = append(items, playlistEntry{playlist: playlist, selected: selected[playlist.ID]})
 	}
 
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
+	delegate := plainDelegate{showDescription: false, height: 1, spacing: 1}
 
 	l := list.New(items, delegate, width, height)
-	l.Title = "choose playlists"
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
 	l.SetFilteringEnabled(false)
-	l.SetShowHelp(true)
+	l.SetShowHelp(false)
 	l.DisableQuitKeybindings()
-	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{
-			key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
-			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "save")),
-			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
-		}
-	}
 	return l
 }
 
-func newProgress(width int) progress.Model {
-	return progress.New(progress.WithDefaultGradient(), progress.WithWidth(clamp(width, 20, 100)))
+// plainDelegate renders list items without any styling or color.
+type plainDelegate struct {
+	showDescription bool
+	height          int
+	spacing         int
+}
+
+func (d plainDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var title, desc string
+	switch it := item.(type) {
+	case menuEntry:
+		title, desc = it.Title(), it.Description()
+	case playlistEntry:
+		title, desc = it.Title(), it.Description()
+	default:
+		return
+	}
+
+	prefix := "  "
+	if index == m.Index() {
+		prefix = "> "
+	}
+
+	width := m.Width() - 2
+	if width < 1 {
+		width = 1
+	}
+
+	if d.showDescription {
+		descWidth := width - 2
+		if descWidth < 1 {
+			descWidth = 1
+		}
+		fmt.Fprintf(w, "%s\n  %s", truncate(prefix+title, width), truncate(desc, descWidth)) //nolint:errcheck
+		return
+	}
+	fmt.Fprint(w, truncate(prefix+title, width)) //nolint:errcheck
+}
+
+func (d plainDelegate) Height() int  { return d.height }
+func (d plainDelegate) Spacing() int { return d.spacing }
+func (d plainDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
+	return nil
+}
+
+func progressBar(done, total, width int) string {
+	if total <= 0 || width < 3 {
+		return ""
+	}
+	filled := done * width / total
+	if filled > width {
+		filled = width
+	}
+	if filled < 0 {
+		filled = 0
+	}
+	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + "]"
+}
+
+func padRight(s string, width int) string {
+	runes := []rune(s)
+	if len(runes) >= width {
+		return string(runes[:width])
+	}
+	return s + strings.Repeat(" ", width-len(runes))
+}
+
+func truncate(s string, width int) string {
+	runes := []rune(s)
+	if len(runes) > width {
+		return string(runes[:width])
+	}
+	return s
+}
+
+var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func spinTick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return spinTickMsg{} })
 }
 
 // --- small helpers ----------------------------------------------------------
