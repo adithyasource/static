@@ -16,11 +16,7 @@ import (
 
 const version = "v1.1.4"
 
-const banner = `
-   ▗   ▗ ▘  
- ▛▘▜▘▀▌▜▘▌▛▘
- ▄▌▐▖█▌▐▖▌▙▖  ` + version + `
-`
+const banner = "static " + version + "\n"
 
 var (
 	stdin     = bufio.NewReader(os.Stdin)

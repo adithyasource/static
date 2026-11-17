@@ -620,7 +620,7 @@ func downloadPlaylist(playlist Playlist) {
 			continue
 		}
 		if err := os.Rename(path, target); err != nil {
-			logf("could not rename %s: %v", path, err)
+			logf("could not rename:\t%s (%v)", path, err)
 		}
 	}
 
@@ -635,7 +635,7 @@ func downloadPlaylist(playlist Playlist) {
 	}
 	saveConfig()
 
-	logf("finished syncing %s", playlist.Name)
+	logf("finished syncing\t%s", playlist.Name)
 }
 
 // --- songs and tagging ------------------------------------------------------
@@ -652,7 +652,7 @@ func downloadSong(songID, folder string) {
 	}
 
 	title := track.Name + " - " + joinArtists(track.Artists)
-	logf("searching for: %s", title)
+	logf("searching for:\t%s", title)
 
 	video, err := searchVideo(title)
 	if err != nil {
@@ -660,36 +660,35 @@ func downloadSong(songID, folder string) {
 		return
 	}
 
-	videoURL := "https://www.youtube.com/watch?v=" + video.ID
-	logf("downloading: %s (%s)", video.Title, videoURL)
+	logf("downloading:\t%s (%v)", video.Title, video.ID)
 
 	basePath := filepath.Join(folder, sanitizeFilename(title))
 	if err := ytdlpDownload(video.ID, basePath); err != nil {
-		logf("download failed for %s: %v", title, err)
+		logf("download failed for:\t%s (%v)", title, err)
 		return
 	}
 
 	mp3Path := basePath + ".mp3"
 	if !fileExists(mp3Path) {
-		logf("downloaded file missing for %s", title)
+		logf("downloaded file missing for:\t%s", title)
 		return
 	}
 
 	if len(track.Album.Images) > 0 {
 		cover, err := fetchBytes(track.Album.Images[0].URL)
 		if err != nil {
-			logf("could not fetch cover for %s: %v", title, err)
+			logf("could not fetch cover for:\t%s (%v)", title, err)
 		} else if err := writeCover(mp3Path, cover); err != nil {
-			logf("tagging image failed for %s: %v", title, err)
+			logf("tagging image failed for:\t%s (%v)", title, err)
 		}
 	}
 
 	if err := writeTags(mp3Path, track, songID, video.ID); err != nil {
-		logf("tagging failed for %s: %v", title, err)
+		logf("tagging failed for:\t%s (%v)", title, err)
 		return
 	}
 
-	logf("downloaded and tagged: %s", mp3Path)
+	logf("tagged:\t\t%s", mp3Path)
 }
 
 func writeCover(mp3Path string, cover []byte) error {

@@ -452,31 +452,12 @@ func (m *tuiModel) resize(width, height int) {
 	if m.playlistsReady {
 		m.playlists.SetSize(m.contentWidth(), m.playlistHeight())
 	}
-	m.input.Width = clamp(width-14, 20, 80)
+	m.input.Width = clamp(width-4, 20, 80)
 }
 
-// frame draws a simple rounded box with one line of vertical padding and
-// two columns of horizontal padding, surrounded by a small margin.
-func (m tuiModel) frame(content string) string {
-	inner := m.contentWidth()
-	hbar := strings.Repeat("─", inner+4)
-	blank := "  │" + strings.Repeat(" ", inner+4) + "│"
-
-	var b strings.Builder
-	b.WriteString("\n")
-	b.WriteString("  ╭" + hbar + "╮\n")
-	b.WriteString(blank + "\n")
-	for _, line := range strings.Split(content, "\n") {
-		b.WriteString("  │  " + padRight(line, inner) + "  │\n")
-	}
-	b.WriteString(blank + "\n")
-	b.WriteString("  ╰" + hbar + "╯\n")
-	return b.String()
-}
-
-func (m tuiModel) contentWidth() int   { return clamp(m.width-10, 30, 190) }
-func (m tuiModel) menuHeight() int     { return clamp(m.height-16, 4, 60) }
-func (m tuiModel) playlistHeight() int { return clamp(m.height-9, 8, 60) }
+func (m tuiModel) contentWidth() int   { return clamp(m.width-2, 20, 190) }
+func (m tuiModel) menuHeight() int     { return clamp(m.height-7, 4, 60) }
+func (m tuiModel) playlistHeight() int { return clamp(m.height-3, 4, 60) }
 
 func (m tuiModel) View() string {
 	if m.width == 0 {
@@ -485,7 +466,7 @@ func (m tuiModel) View() string {
 
 	switch m.screen {
 	case screenMenu:
-		return m.frame(strings.Trim(banner, "\n") + "\n\n" + m.menu.View() + "\n↑/↓ move • enter select • ctrl+c quit")
+		return strings.Trim(banner, "\n") + "\n\n" + m.menu.View() + "\n↑/↓ move • enter select • ctrl+c quit"
 
 	case screenInput:
 		body := m.inputTitle + "\n\n" + m.input.View()
@@ -495,18 +476,16 @@ func (m tuiModel) View() string {
 		if m.inputErr != "" {
 			body += "\n\n" + m.inputErr
 		}
-		body += "\n\nenter confirm • esc back"
-		return m.frame(body)
+		return body + "\n\nenter confirm • esc back"
 
 	case screenConfirm:
-		body := m.confirmTitle + "\n\n" + m.confirmBody + "\n\ny/enter yes • n/esc no"
-		return m.frame(body)
+		return m.confirmTitle + "\n\n" + m.confirmBody + "\n\ny/enter yes • n/esc no"
 
 	case screenPlaylists:
-		return m.frame("choose playlists\n\n" + m.playlists.View() + "\nspace toggle • enter save • esc back")
+		return "choose playlists\n\n" + m.playlists.View() + "\nspace toggle • enter save • esc back"
 
 	case screenRun:
-		return m.frame(m.runView())
+		return m.runView()
 	}
 
 	return ""
@@ -526,14 +505,13 @@ func (m tuiModel) runView() string {
 	b.WriteString("\n\n")
 
 	if m.progressTotal > 0 {
-		b.WriteString(progressBar(m.progressDone, m.progressTotal, clamp(m.width-16, 10, m.contentWidth()-2)))
+		b.WriteString(progressBar(m.progressDone, m.progressTotal, clamp(m.contentWidth()-2, 10, 60)))
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("%d/%d", m.progressDone, m.progressTotal))
 		b.WriteString("\n\n")
 	}
 
-	width := clamp(m.width-14, 20, 100)
-	for _, line := range m.runLines(width, clamp(m.height-14, 3, 20)) {
+	for _, line := range m.runLines(m.contentWidth(), clamp(m.height-7, 3, 20)) {
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
@@ -667,14 +645,6 @@ func progressBar(done, total, width int) string {
 	filled := done * width / total
 	filled = min(filled, width)
 	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + "]"
-}
-
-func padRight(s string, width int) string {
-	runes := []rune(s)
-	if len(runes) >= width {
-		return string(runes[:width])
-	}
-	return s + strings.Repeat(" ", width-len(runes))
 }
 
 func truncate(s string, width int) string {
