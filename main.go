@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 )
@@ -32,11 +31,8 @@ var (
 
 	stderrLogger = stdlog.New(os.Stderr, "", stdlog.LstdFlags)
 
-	cliMode          bool // true when a subcommand was given
-	cliAutoReconnect bool // set by --reconnect-if-disconnected
+	autoReconnect bool // set by --reconnect-if-disconnected
 )
-
-var numberedPrefix = regexp.MustCompile(`^\d{3}\. `)
 
 // Config is the same shape as the old python data.json.
 type Config struct {
@@ -61,23 +57,18 @@ func main() {
 		return
 	}
 	initLog()
-	defer func() {
-		if logFile != nil {
-			logFile.Close()
-		}
-	}()
-	cliMode = len(os.Args) > 1
-	if !cliMode {
-		logf("starting")
+	if logFile != nil {
+		defer logFile.Close()
 	}
 
 	cfg = loadConfig()
 
-	if cliMode {
+	if len(os.Args) > 1 {
 		runCLI(os.Args[1:])
 		return
 	}
 
+	logf("starting")
 	if err := runTUI(); err != nil {
 		fmt.Println("tui error:", err)
 	}
@@ -95,7 +86,7 @@ func runCLI(args []string) {
 		reconnect := fs.Bool("reconnect-if-disconnected", false, "reconnect automatically if the spotify token expired")
 		openBrowser := fs.Bool("auto-open-browser-link", false, "open the spotify login link in your browser")
 		fs.Parse(args[1:])
-		cliAutoReconnect = *reconnect
+		autoReconnect = *reconnect
 		syncPlaylists(*openBrowser)
 
 	case "reset-snapshots", "reset":
@@ -107,7 +98,7 @@ func runCLI(args []string) {
 		reconnect := fs.Bool("reconnect-if-disconnected", false, "reconnect automatically if the spotify token expired")
 		openBrowser := fs.Bool("auto-open-browser-link", false, "open the spotify login link in your browser")
 		fs.Parse(args[1:])
-		cliAutoReconnect = *reconnect
+		autoReconnect = *reconnect
 		selectPlaylists(*listOnly, fs.Args(), *openBrowser)
 
 	case "folder":
@@ -191,8 +182,7 @@ func connectSpotify(clientID, clientSecret string, openBrowser bool) {
 	}
 
 	if cfg.ClientID == "" || cfg.ClientSecret == "" {
-		setupClient(false)
-		if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		if !setupClient(false) {
 			return
 		}
 	}
@@ -300,33 +290,29 @@ func initLog() {
 	logger = stdlog.New(f, "", stdlog.LstdFlags)
 }
 
+func sendToTUI(msg string) bool {
+	if tuiProgram == nil {
+		return false
+	}
+	tuiProgram.Send(tuiLogMsg(msg))
+	return true
+}
+
 func logf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if logger != nil {
 		logger.Print(msg)
 	}
-	if tuiProgram != nil {
-		tuiProgram.Send(tuiLogMsg(msg))
-		return
+	if !sendToTUI(msg) {
+		stderrLogger.Print(msg)
 	}
-	stderrLogger.Print(msg)
 }
 
 func say(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	if tuiProgram != nil {
-		tuiProgram.Send(tuiLogMsg(msg))
-		return
+	if !sendToTUI(msg) {
+		fmt.Println(msg)
 	}
-	fmt.Println(msg)
-}
-
-func clearScreen() {
-	if cliMode || tuiActive {
-		return
-	}
-	fmt.Print("\033[H\033[2J\033[3J")
-	fmt.Print(banner)
 }
 
 func display(value string) string {
@@ -344,11 +330,6 @@ func ask(question string) string {
 func askOK(question string) (string, bool) {
 	fmt.Print(question)
 	return readLine()
-}
-
-func confirm(question string) bool {
-	answer := ask(question + " [y/N] ")
-	return strings.HasPrefix(strings.ToLower(answer), "y")
 }
 
 func readLine() (string, bool) {

@@ -12,10 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var (
-	tuiProgram *tea.Program
-	tuiActive  bool
-)
+var tuiProgram *tea.Program
 
 // messages sent from the worker goroutines into the tui
 type (
@@ -55,12 +52,10 @@ const (
 
 type menuEntry struct {
 	title  string
-	desc   string
 	action menuAction
 }
 
 func (m menuEntry) Title() string       { return m.title }
-func (m menuEntry) Description() string { return m.desc }
 func (m menuEntry) FilterValue() string { return m.title }
 
 type playlistEntry struct {
@@ -116,16 +111,12 @@ type tuiModel struct {
 }
 
 func runTUI() error {
-	tuiActive = true
-	cliAutoReconnect = true
-	defer func() {
-		tuiActive = false
-		tuiProgram = nil
-	}()
+	autoReconnect = true
 
 	program := tea.NewProgram(newTUIModel(), tea.WithAltScreen())
 	tuiProgram = program
 	_, err := program.Run()
+	tuiProgram = nil
 	return err
 }
 
@@ -494,8 +485,7 @@ func (m tuiModel) View() string {
 
 	switch m.screen {
 	case screenMenu:
-		header := strings.Trim(banner, "\n")
-		return m.frame(header + "\n\n" + "main menu" + "\n\n" + m.menu.View() + "\n" + "↑/↓ move • enter select • ctrl+c quit")
+		return m.frame(strings.Trim(banner, "\n") + "\n\n" + m.menu.View() + "\n↑/↓ move • enter select • ctrl+c quit")
 
 	case screenInput:
 		body := m.inputTitle + "\n\n" + m.input.View()
@@ -505,15 +495,15 @@ func (m tuiModel) View() string {
 		if m.inputErr != "" {
 			body += "\n\n" + m.inputErr
 		}
-		body += "\n\n" + "enter confirm • esc back"
+		body += "\n\nenter confirm • esc back"
 		return m.frame(body)
 
 	case screenConfirm:
-		body := m.confirmTitle + "\n\n" + m.confirmBody + "\n\n" + "y/enter yes • n/esc no"
+		body := m.confirmTitle + "\n\n" + m.confirmBody + "\n\ny/enter yes • n/esc no"
 		return m.frame(body)
 
 	case screenPlaylists:
-		return m.frame("choose playlists" + "\n\n" + m.playlists.View() + "\n" + "space toggle • enter save • esc back")
+		return m.frame("choose playlists\n\n" + m.playlists.View() + "\nspace toggle • enter save • esc back")
 
 	case screenRun:
 		return m.frame(m.runView())
@@ -577,39 +567,33 @@ func buildMenuItems() []list.Item {
 	if cfg.UserName != "" {
 		if len(cfg.SelectedPlaylists) > 0 {
 			items = append(items,
-				menuEntry{"sync", "download and tag every unsynced playlist", actSync},
-				menuEntry{"reset snapshot ids (force sync)", "make the next sync fetch everything again", actReset},
+				menuEntry{"sync", actSync},
+				menuEntry{"reset snapshot ids (force sync)", actReset},
 			)
 		}
-		items = append(items, menuEntry{"choose playlists to sync", "pick which playlists to keep offline", actPlaylists})
+		items = append(items, menuEntry{"choose playlists to sync", actPlaylists})
 	}
 
 	items = append(items,
-		menuEntry{fmt.Sprintf("choose sync folder [%s]", display(cfg.SyncFolder)), "where the playlist folders live", actFolder},
-		menuEntry{fmt.Sprintf("connect spotify account [%s]", display(cfg.UserName)), "run the spotify login flow", actConnect},
+		menuEntry{fmt.Sprintf("choose sync folder [%s]", display(cfg.SyncFolder)), actFolder},
+		menuEntry{fmt.Sprintf("connect spotify account [%s]", display(cfg.UserName)), actConnect},
 	)
 
 	if cfg.SyncFolder != "" {
-		items = append(items, menuEntry{"open sync folder", "show it in your file manager", actOpenSync})
+		items = append(items, menuEntry{"open sync folder", actOpenSync})
 	}
 
 	items = append(items,
-		menuEntry{"open data folder", "config and logs", actOpenData},
-		menuEntry{"built by adithya.zip", "visit the website", actWebsite},
-		menuEntry{"coffee?", "buy adithya a coffee", actCoffee},
+		menuEntry{"open data folder", actOpenData},
+		menuEntry{"built by adithya.zip", actWebsite},
+		menuEntry{"coffee?", actCoffee},
 	)
 
 	return items
 }
 
 func newMenuList(width, height int) list.Model {
-	l := list.New(buildMenuItems(), plainDelegate{showDescription: true, height: 2, spacing: 1}, width, height)
-	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
-	l.SetShowPagination(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowHelp(false)
-	return l
+	return newPlainList(buildMenuItems(), plainDelegate{}, width, height)
 }
 
 func newPlaylistList(playlists []Playlist, width, height int) list.Model {
@@ -625,32 +609,32 @@ func newPlaylistList(playlists []Playlist, width, height int) list.Model {
 		items = append(items, playlistEntry{playlist: playlist, selected: selected[playlist.ID]})
 	}
 
-	delegate := plainDelegate{showDescription: false, height: 1, spacing: 1}
+	l := newPlainList(items, plainDelegate{}, width, height)
+	l.DisableQuitKeybindings()
+	return l
+}
 
+// newPlainList creates a list without titles, status bars, pagination or help.
+func newPlainList(items []list.Item, delegate list.ItemDelegate, width, height int) list.Model {
 	l := list.New(items, delegate, width, height)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowPagination(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
-	l.DisableQuitKeybindings()
 	return l
 }
 
 // plainDelegate renders list items without any styling or color.
-type plainDelegate struct {
-	showDescription bool
-	height          int
-	spacing         int
-}
+type plainDelegate struct{}
 
 func (d plainDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	var title, desc string
+	var title string
 	switch it := item.(type) {
 	case menuEntry:
-		title, desc = it.Title(), it.Description()
+		title = it.Title()
 	case playlistEntry:
-		title, desc = it.Title(), it.Description()
+		title = it.Title()
 	default:
 		return
 	}
@@ -661,23 +645,17 @@ func (d plainDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	}
 
 	width := m.Width() - 2
-	if width < 1 {
-		width = 1
-	}
+	width = max(width, 1)
 
-	if d.showDescription {
-		descWidth := width - 2
-		if descWidth < 1 {
-			descWidth = 1
-		}
-		fmt.Fprintf(w, "%s\n  %s", truncate(prefix+title, width), truncate(desc, descWidth)) //nolint:errcheck
-		return
-	}
 	fmt.Fprint(w, truncate(prefix+title, width)) //nolint:errcheck
 }
 
-func (d plainDelegate) Height() int  { return d.height }
-func (d plainDelegate) Spacing() int { return d.spacing }
+func (d plainDelegate) Height() int {
+	return 1
+}
+
+func (d plainDelegate) Spacing() int { return 1 }
+
 func (d plainDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 	return nil
 }
@@ -687,12 +665,7 @@ func progressBar(done, total, width int) string {
 		return ""
 	}
 	filled := done * width / total
-	if filled > width {
-		filled = width
-	}
-	if filled < 0 {
-		filled = 0
-	}
+	filled = min(filled, width)
 	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + "]"
 }
 

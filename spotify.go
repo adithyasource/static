@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,10 @@ const (
 	spotifyScope = "user-read-private user-read-email playlist-read-private"
 )
 
-var httpClient = &http.Client{Timeout: 60 * time.Second}
+var (
+	httpClient     = &http.Client{Timeout: 60 * time.Second}
+	numberedPrefix = regexp.MustCompile(`^\d{3}\. `)
+)
 
 // --- spotify api types ------------------------------------------------------
 
@@ -99,14 +103,6 @@ type PlaylistItemsPage struct {
 
 func setupClient(preConfirm bool) bool {
 	if !preConfirm {
-		if cfg.ClientID != "" || cfg.ClientSecret != "" {
-			if !cliMode && !tuiActive && !confirm("do you want to overwrite the current client secrets?") {
-				// keep the saved secrets and continue with them
-				return cfg.ClientID != "" && cfg.ClientSecret != ""
-			}
-			clearScreen()
-		}
-
 		say("in order for static to access your spotify data, it needs a client id and secret associated to your account")
 		say("")
 		say("follow the given step to obtain them")
@@ -116,11 +112,8 @@ func setupClient(preConfirm bool) bool {
 		say("")
 		ask("press enter to continue")
 
-		clearScreen()
 		cfg.ClientID = ask("enter your spotify client id: ")
-		clearScreen()
 		cfg.ClientSecret = ask("enter your spotify client secret: ")
-		clearScreen()
 		saveConfig()
 	}
 
@@ -128,17 +121,9 @@ func setupClient(preConfirm bool) bool {
 }
 
 func setupUser(preConfirm bool, openBrowser bool) {
-	clearScreen()
-
 	if !setupClient(preConfirm) {
 		say("a spotify client id and secret are required")
 		return
-	}
-
-	if !preConfirm && !cliMode && !tuiActive && cfg.UserName != "" {
-		if !confirm("are you sure you want to overwrite the already connected account?") {
-			return
-		}
 	}
 
 	accessToken, err := createAccessToken(openBrowser)
@@ -316,17 +301,8 @@ func getPlaylists() ([]Playlist, int, error) {
 func maybeReconnect(openBrowser bool) bool {
 	say("looks like your spotify account got disconnected (token expired)")
 
-	reconnect := false
-	if cliMode || tuiActive {
-		reconnect = cliAutoReconnect
-		if !reconnect && !tuiActive {
-			say("run 'static connect' to reconnect, or pass --reconnect-if-disconnected")
-		}
-	} else {
-		reconnect = confirm("do you want to reconnect?")
-	}
-
-	if !reconnect {
+	if !autoReconnect {
+		say("run 'static connect' to reconnect, or pass --reconnect-if-disconnected")
 		return false
 	}
 
@@ -335,14 +311,11 @@ func maybeReconnect(openBrowser bool) bool {
 }
 
 func selectPlaylists(listOnly bool, picks []string, openBrowser bool) {
-	clearScreen()
-
 	playlists, status, err := getPlaylists()
 	if status == http.StatusUnauthorized {
 		if !maybeReconnect(openBrowser) {
 			return
 		}
-		clearScreen()
 		playlists, status, err = getPlaylists()
 	}
 	if err != nil {
@@ -443,19 +416,16 @@ func getUnsyncedPlaylists(openBrowser bool) ([]Playlist, []Playlist) {
 	}
 
 	firstID, _ := selectedPlaylist(cfg.SelectedPlaylists[0])
-	var check Playlist
-	status, err := spotifyGet("/playlists/"+firstID, &check)
+	status, err := spotifyGet("/playlists/"+firstID, nil)
 	if status == http.StatusUnauthorized {
 		if !maybeReconnect(openBrowser) {
 			return nil, nil
 		}
-		clearScreen()
 	} else if err != nil {
 		say("could not check playlists: %v", err)
 		return nil, nil
 	}
 
-	clearScreen()
 	say("checking for unsynced playlists")
 	say("")
 
@@ -485,8 +455,6 @@ func getUnsyncedPlaylists(openBrowser bool) ([]Playlist, []Playlist) {
 }
 
 func syncPlaylists(openBrowser bool) {
-	clearScreen()
-
 	if cfg.SyncFolder == "" {
 		say("choose a sync folder first")
 		return
@@ -544,13 +512,10 @@ func syncPlaylists(openBrowser bool) {
 		}
 	}
 
-	clearScreen()
 	say("sync complete")
 }
 
 func downloadPlaylist(playlist Playlist) {
-	clearScreen()
-
 	folder := filepath.Join(expandHome(cfg.SyncFolder), playlist.Name)
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		say("could not create %s: %v", folder, err)
@@ -621,7 +586,6 @@ func downloadPlaylist(playlist Playlist) {
 		return
 	}
 
-	clearScreen()
 	say("spotify/%s/%s -> %s", cfg.UserName, playlist.Name, folder)
 	say("")
 	say("organizing files")
@@ -650,10 +614,7 @@ func downloadPlaylist(playlist Playlist) {
 			continue
 		}
 
-		newName := name
-		if numberedPrefix.MatchString(name) {
-			newName = name[5:]
-		}
+		newName := numberedPrefix.ReplaceAllString(name, "")
 		target := filepath.Join(folder, fmt.Sprintf("%03d. %s", number, newName))
 		if target == path {
 			continue
